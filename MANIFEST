@@ -1,4 +1,15 @@
+Build.PL
 Changes
+inc/Module/Install.pm
+inc/Module/Install/AutoInstall.pm
+inc/Module/Install/Base.pm
+inc/Module/Install/Build.pm
+inc/Module/Install/Can.pm
+inc/Module/Install/Fetch.pm
+inc/Module/Install/Makefile.pm
+inc/Module/Install/Metadata.pm
+inc/Module/Install/Win32.pm
+inc/Module/Install/WriteAll.pm
 lib/Class/Autouse.pm
 lib/Class/Autouse/Parent.pm
 LICENSE
@@ -12,5 +23,7 @@ modules/D.pm
 modules/E.pm
 modules/F.pm
 README
+t/00_compile.t
 t/01_main.t
 t/02_parent.t
+t/03_prefork.t

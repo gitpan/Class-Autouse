@@ -4,7 +4,7 @@ package Class::Autouse;
 
 ### Memory Overhead: 180K
 
-require 5.005;
+use 5.005;
 use strict;
 no strict 'refs'; # We do a LOT of bad ref stuff
 use UNIVERSAL ();
@@ -17,13 +17,14 @@ use base 'Exporter';
 use Carp       ();
 use File::Spec ();
 use List::Util ();
+use prefork    ();
 
 # Globals
 use vars qw{$VERSION $DEBUG $UNIX $DEVEL $SUPERLOAD}; # Load environment
 use vars qw{$HOOKS %chased %loaded %special %bad};    # Working data
 use vars qw{*_UNIVERSAL_can};                         # Subroutine storage
 BEGIN {
-	$VERSION = '1.04';
+	$VERSION = '1.10';
 	$DEBUG   = 0;
 
 	# Detect Unix file semantics
@@ -32,12 +33,9 @@ BEGIN {
 	# We play with UNIVERSAL::can at times, so save a backup copy
 	*_UNIVERSAL_can = *UNIVERSAL::can{CODE};
 
-	# Using Class::Autouse in a mod_perl situation can be dangerous,
-	# as it can clash badly with auto-reloaders such as Apache::Reload.
-	# So ALWAYS run in devel mode under mod_perl. Since they should
-	# probably be loading modules at startup time ( in the parent
-	# process ) anyway, this is a good thing.
-	$DEVEL = !! $ENV{MOD_PERL};
+	# Start with devel mode off.
+	# prefork will turn it on if it needs to.
+	$DEVEL = 0;
 
 	# We always start with the superloader off
 	$SUPERLOAD = 0;
@@ -69,12 +67,27 @@ sub _class_file($);
 # Configuration and Setting up
 
 # Developer mode flag.
-# Don't let them turn it off if we are under mod_perl.
+# Don't let them turn it off if we forced on.
 sub devel {
 	_debug(\@_, 1) if $DEBUG;
 
-	return 1 if $ENV{MOD_PERL};
-	$DEVEL = !! $_[1];
+	# Handle shortcuts
+	if ( $prefork::FORKING and ! $_[1] ) {
+		return 1;
+	}
+	return 1 if $DEVEL;
+
+	# Enable devel mode
+	$DEVEL = 1;
+
+	# Load all outstanding modules
+	foreach my $class ( grep { $INC{$_} eq 'Class::Autouse' } keys %INC ) {
+		$class =~ s/\//::/;
+		$class =~ s/\.pm$//i;
+		Class::Autouse->load($class);
+	}
+
+	1;
 }
 
 # Happy Fun Super Loader!
@@ -91,9 +104,9 @@ sub superloader {
 		*UNIVERSAL::AUTOLOAD = \&_AUTOLOAD;
 		*UNIVERSAL::DESTROY  = \&_DESTROY;
 
-		# Because this will never go away, we increment $HOOKS,
-		# which will never be decremented, and this the UNIVERSAL::can
-		# hijack will never be removed.
+		# Because this will never go away, we increment $HOOKS such
+		# that it will never be decremented, and this the
+		# UNIVERSAL::can hijack will never be removed.
 		__UPDATE_CAN() unless $HOOKS++;
 	}
 
@@ -126,7 +139,7 @@ sub autouse {
 			next;
 		}
 
-		# Load now if in devel mode, or if it's a bad class
+		# Load now if in devel mode, or if its a bad class
 		if ( $DEVEL || $bad{$class} ) {
 			Class::Autouse->load( $class );
 			next;
@@ -161,7 +174,7 @@ sub autouse {
 #####################################################################
 # Explicit Actions
 
-# Completely load a class ( The class and all it's dependencies ).
+# Completely load a class ( The class and all its dependencies ).
 sub load {
 	_debug(\@_, 1) if $DEBUG;
 
@@ -194,7 +207,7 @@ sub load {
 sub class_exists {
 	_debug(\@_, 1) if $DEBUG;
 
-	# Is the class loaded already, or can we find it's file
+	# Is the class loaded already, or can we find its file
 	_namespace_occupied($_[1]) or _file_exists($_[1]);
 }
 
@@ -232,7 +245,7 @@ sub autouse_recursive {
 sub load_recursive {
 	_debug(\@_, 1) if $DEBUG;
 
-	# Load the parent class, and it's children
+	# Load the parent class, and its children
 	my $class = $_[1];
 	foreach ( $class, _child_classes($class) ) {
 		Class::Autouse->load($_);
@@ -316,7 +329,7 @@ sub _can {
 		$load = 1;
 	}
 
-	# If needed, load the class and all it's dependencies.
+	# If needed, load the class and all its dependencies.
 	# UNIVERSAL::can never dies, so we shouldn't either.
 	# Ignore, errors. If something goes wrong,
 	# let the real UNIVERSAL::can have a short at it anyway.
@@ -408,7 +421,7 @@ sub _child_classes {
 		foreach my $file ( @files ) {
 			my $full_file = File::Spec->catfile( $inc_path, $file );
 
-			# Add to the queue if it's a directory we can descend
+			# Add to the queue if its a directory we can descend
 			if ( -d $full_file and -r $full_file ) {
 				push @queue, $file;
 				next;
@@ -455,15 +468,17 @@ sub _file_exists {
 }
 
 # Is a namespace occupied by anything significant
-sub _namespace_occupied($) {
+sub _namespace_occupied ($) {
 	_debug(\@_) if $DEBUG;
 
 	# Handle the most likely case
 	my $class = shift or return undef;
 	return 1 if defined @{"${class}::ISA"};
 
-	# Get the list of glob names
+	# Get the list of glob names, ignoring namespaces
 	foreach ( keys %{"${class}::"} ) {
+		next if /::$/;
+
 		# Only check for methods, since that's all that's reliable
 		return 1 if defined *{"${class}::$_"}{CODE};
 	}
@@ -472,7 +487,7 @@ sub _namespace_occupied($) {
 }
 
 # For a given class, get the file name
-sub _class_file($) { join( '/', split /(?:\'|::)/, shift ) . '.pm' }
+sub _class_file ($) { join( '/', split /(?:\'|::)/, shift ) . '.pm' }
 
 # Establish our call depth
 sub _call_depth {
@@ -541,9 +556,13 @@ sub __UPDATE_CAN {
 }
 END_OLD_PERL
 
+# A few things that need to happen at BEGIN-time, but last
 BEGIN {
 	# Linking import to autouse lets us act as a pragma
 	*import = *autouse;
+
+	# Go into devel mode when prefork is enabled
+	prefork::notify( sub { Class::Autouse->devel(1) } );
 }
 
 1;
@@ -700,7 +719,7 @@ The devel method sets development mode on (argument of 1) or off (argument of 0)
 
 The superloader method turns on the super loader. Please note that once you
 have turned the superloader on, it cannot be turned off. This is due to
-code that might be relying on it being there not being able to autoload it's
+code that might be relying on it being there not being able to autoload its
 classes when another piece of code decides they don't want it any more, and
 turns the superloader off.
 
@@ -726,18 +745,15 @@ a large class tree that might not always be loaded will load correctly.
 
 Bugs should be reported via the CPAN bug tracker at
 
-  http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse>
 
 For other issues, contact the author
 
 =head1 AUTHORS
 
-        Adam Kennedy ( maintainer )
-        cpan@ali.as
-        http://ali.as/
+Adam Kennedy (Maintainer), L<http://ali.as/>, cpan@ali.as
 
-        Rob Napier
-        rnapier@employees.org
+Rob Napier (No longer involved), rnapier@employees.org
 
 =head1 SEE ALSO
 

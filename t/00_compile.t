@@ -1,5 +1,7 @@
 #!/usr/bin/perl -w
 
+# Load testing for Class::Autouse
+
 use strict;
 use lib ();
 use UNIVERSAL 'isa';
@@ -11,15 +13,15 @@ BEGIN {
 		chdir ($FindBin::Bin = $FindBin::Bin); # Avoid a warning
 		lib->import( catdir( updir(), updir(), 'modules') );
 	}
-	lib->import( catdir( curdir(), 'modules' ) );
 }
 
-use Test::More tests => 2;
-use Class::Autouse qw{:devel};
-use Class::Autouse::Parent;
+use Test::More tests => 3;
 
-# Test the loading of children
-use_ok( 'A' );
-ok( $A::B::loaded, 'Parent class loads child class OK' );
-$A::B::loaded ? 1 : 0 # Shut a warning up
+# Check their perl version
+ok( $] >= 5.005, "Your perl is new enough" );
 
+# Does the module load
+use_ok('Class::Autouse');
+use_ok('Class::Autouse::Parent');
+
+exit(0);

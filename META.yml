@@ -7,8 +7,9 @@ requires:
   Carp:                          0
   File::Spec:                    0.82
   List::Util:                    1.11
+  prefork:                       0.03
 build_requires:
-  Test::More:                    0
+  Test::More:                    0.47
 private:
   directory:
     - modules

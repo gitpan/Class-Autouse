@@ -1,5 +1,10 @@
 Revision history for Perl extension Class::Autouse.
 
+1.10 Sat Nov 13 2004
+	- Integrated with prefork.pm
+	- devel loads all outstanding modules when called
+	- Added some more unit tests
+
 1.04 Mon Jul  6 2004
 	- Only hijack UNIVERSAL::can for the period that we have
 	  live autoload hooks

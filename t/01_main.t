@@ -8,31 +8,22 @@
 # as advertised... we hope ;)
 
 use strict;
-use File::Spec::Functions qw{:ALL};
-# Includes for development AND installation testing
-use lib catdir( curdir(), 'modules' ),
-        catdir( 't', 'modules' ),
-        catdir( updir(), updir(), 'modules' );
+use lib ();
 use UNIVERSAL 'isa';
-use Test::More tests => 18;
-use Scalar::Util 'refaddr';
-
-BEGIN { $| = 1 }
-
-
-
-
-# Check their perl version
+use File::Spec::Functions ':ALL';
 BEGIN {
-	ok( $] >= 5.005, "Your perl is new enough" );
+	$| = 1;
+	unless ( $ENV{HARNESS_ACTIVE} ) {
+		require FindBin;
+		chdir ($FindBin::Bin = $FindBin::Bin); # Avoid a warning
+		lib->import( catdir( updir(), updir(), 'modules') );
+	}
+	lib->import( catdir( curdir(), 'modules' ) );
 }
 
-
-
-
-
-# Does the module load
-use_ok( 'Class::Autouse' );
+use Test::More tests => 16;
+use Scalar::Util 'refaddr';
+use Class::Autouse ();
 
 
 

@@ -135,7 +135,7 @@ METHODS
     The superloader method turns on the super loader. Please note that once
     you have turned the superloader on, it cannot be turned off. This is due
     to code that might be relying on it being there not being able to
-    autoload it's classes when another piece of code decides they don't want
+    autoload its classes when another piece of code decides they don't want
     it any more, and turns the superloader off.
 
   class_exists $class
@@ -158,17 +158,14 @@ METHODS
 SUPPORT
     Bugs should be reported via the CPAN bug tracker at
 
-      http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse
+    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse>
 
     For other issues, contact the author
 
 AUTHORS
-            Adam Kennedy ( maintainer )
-            cpan@ali.as
-            http://ali.as/
+    Adam Kennedy (Maintainer), <http://ali.as/>, cpan@ali.as
 
-            Rob Napier
-            rnapier@employees.org
+    Rob Napier (No longer involved), rnapier@employees.org
 
 SEE ALSO
     autoload, autoclass
