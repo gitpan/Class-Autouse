@@ -1,15 +1,16 @@
 Changes
-LICENSE
-MANIFEST			This list of files
-Makefile.PL
-README
 lib/Class/Autouse.pm
 lib/Class/Autouse/Parent.pm
+LICENSE
+Makefile.PL
+MANIFEST			This list of files
+META.yml
 modules/A.pm
 modules/A/B.pm
 modules/C.pm
 modules/D.pm
 modules/E.pm
 modules/F.pm
+README
 t/01_main.t
 t/02_parent.t

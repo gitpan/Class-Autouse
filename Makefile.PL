@@ -11,6 +11,7 @@ WriteMakefile(
 	},
 	($] >= 5.005) ? (
 		'AUTHOR'   => 'Adam Kennedy (cpan@ali.as)',
-		'ABSTRACT' => 'Defer loading of one or more classes'
+		'ABSTRACT' => 'Defer loading of one or more classes',
+		'NO_META'  => 1,
 	) : (),
 );

@@ -19,7 +19,7 @@ use vars qw{$devel $superloader};
 use vars qw{%chased %loaded %special %bad};
 use vars qw{*_original_can};
 BEGIN {
-	$VERSION = 0.8;
+	$VERSION = 0.9;
 	$DEBUG   = 0;
 
 	# Using Class::Autouse in a mod_perl situation can be dangerous, 
@@ -275,6 +275,10 @@ sub _destroy { _debug(\@_) if $DEBUG }
 sub _can {
 	my $class = ref $_[0] || $_[0] || return undef;
 
+	# Handle some shortcut cases to make this run at a reasonable speed.
+	$loaded{$class} and goto &_original_can;
+	_namespace_occupied($class) and goto &_original_can;
+
 	# Load the class and all it's dependencies.
 	# UNIVERSAL::can never dies, so we shouldn't either.
 	# It just returns undef if something goes wrong.
@@ -282,7 +286,7 @@ sub _can {
 	return undef if $@;
 
 	# Give to the normal UNIVERSAL::can
-	goto &_original_can;
+	goto &_original_can;	
 }
 
 

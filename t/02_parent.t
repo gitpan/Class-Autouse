@@ -2,9 +2,10 @@
 
 use strict;
 use File::Spec::Functions qw{:ALL};
-use lib catdir( updir(), updir(), 'modules' ),
-        catdir( curdir(), 'modules' ); # Development testing
-use lib catdir( 't', 'modules' ); # Installation testing
+# Includes for development AND installation testing
+use lib catdir( curdir(), 'modules' ),
+        catdir( 't', 'modules' ),
+        catdir( updir(), updir(), 'modules' );
 use UNIVERSAL 'isa';
 use Test::More tests => 4;
 use Class::Autouse qw{:devel};
