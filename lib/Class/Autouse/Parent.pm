@@ -7,6 +7,11 @@ package Class::Autouse::Parent;
 use strict;
 use Class::Autouse ();
 
+use vars qw{$VERSION};
+BEGIN {
+	$VERSION = '1.0';
+}
+
 # Maintain flags for "is the class in the process of loading"
 my %LOADING = ();
 

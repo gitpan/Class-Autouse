@@ -1,5 +1,5 @@
 name:         Class-Autouse
-version:      0.9
+version:      1.0
 version_from: lib/Class/Autouse.pm
 installdirs:  site
 license:      perl

@@ -19,7 +19,7 @@ use vars qw{$devel $superloader};
 use vars qw{%chased %loaded %special %bad};
 use vars qw{*_original_can};
 BEGIN {
-	$VERSION = 0.9;
+	$VERSION = '1.0';
 	$DEBUG   = 0;
 
 	# Using Class::Autouse in a mod_perl situation can be dangerous, 
@@ -275,17 +275,16 @@ sub _destroy { _debug(\@_) if $DEBUG }
 sub _can {
 	my $class = ref $_[0] || $_[0] || return undef;
 
-	# Handle some shortcut cases to make this run at a reasonable speed.
-	$loaded{$class} and goto &_original_can;
-	_namespace_occupied($class) and goto &_original_can;
+	# If it doesn't appear to be loaded, have a go at loading it
+	unless ( $loaded{$class} or _namespace_occupied($class) ) {
+		# Load the class and all it's dependencies.
+		# UNIVERSAL::can never dies, so we shouldn't either.
+		# Ignore, errors. If something goes wrong, 
+		# let the real UNIVERSAL::can have a short at it anyway.
+		eval { Class::Autouse->load($class) };
+	}
 
-	# Load the class and all it's dependencies.
-	# UNIVERSAL::can never dies, so we shouldn't either.
-	# It just returns undef if something goes wrong.
-	eval { Class::Autouse->load($class) };
-	return undef if $@;
-
-	# Give to the normal UNIVERSAL::can
+	# Hand off to the real UNIVERSAL::can
 	goto &_original_can;	
 }
 
@@ -428,8 +427,11 @@ sub _file_exists {
 sub _namespace_occupied {
 	_debug(\@_) if $DEBUG;
 
-	# Get the list of glob names
+	# Handle the most likely case
 	my $class = shift or return undef;
+	return 1 if defined @{"${class}::ISA"};
+
+	# Get the list of glob names
 	foreach ( keys %{"${class}::"} ) {
 		# Only check for methods, since that's all that's reliable
 		return 1 if defined *{"${class}::$_"}{CODE};

@@ -9,7 +9,7 @@ use lib catdir( curdir(), 'modules' ),
         catdir( 't', 'modules' ),
         catdir( updir(), updir(), 'modules' );
 use UNIVERSAL 'isa';
-use Test::More tests => 9;
+use Test::More tests => 10;
 
 BEGIN { $| = 1 }
 
@@ -50,3 +50,13 @@ ok( Class::Autouse->autouse( 'E' ), 'Test class E autouses ok' );
 ok( Class::Autouse->autouse( 'F' ), 'Test class F autouses ok' );
 ok( F->foo eq 'Return value from E->foo', 'Class->SUPER::method works safely' );
 
+
+
+
+# This should fail for Class::Autouse 0.8 and 0.9
+# If an non packaged based class is empty, but for an ISA to an existing class,
+# and method 'foo' exists in the parent class, UNIVERSAL::can SHOULD return true.
+# After the addition of the UNIVERSAL::can replacement Class::Autouse::_can, it didn't.
+# In particular, this was causing problems with MakeMaker.
+@G::ISA = 'E';
+ok( G->can('foo'), "_can handles the empty class with \@ISA case correctly" );

@@ -1,5 +1,11 @@
 Revision history for Perl extension Class::Autouse.
 
+1.0  Sun Sep 21 2003
+	- Fixed a bug in _can
+
+0.9
+	- Unknown
+	
 0.8
 	- Converted to File::Spec.
 	- Added Class::Autouse::Parent
