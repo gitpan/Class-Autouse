@@ -13,6 +13,10 @@ requires      ( 'List::Util'   => '1.11'    );
 
 build_requires( 'Test::More'   => '0.47'    );
 
+# Requested by clkao to make installation of svk in some
+# situations easier and not fail.
+include       ( 'ExtUtils::AutoInstall'     );
+
 # Out test directories contain valid looking modules.
 # Make sure they don't get indexed.
 no_index      ( directory      => 'modules' );

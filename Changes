@@ -1,5 +1,9 @@
 Revision history for Perl extension Class::Autouse.
 
+1.17 Tue Mar  8 2005
+	- Added include('ExtUtils::AutoInstall') by request, to make
+	  life easier when installing svk, although I have NFI why :/
+
 1.16 Tue Feb 15 2005
 	- Removing braindead pass-through Build.PL file
 
