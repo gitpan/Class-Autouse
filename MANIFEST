@@ -1,6 +1,7 @@
-Autouse.pm
 Changes
+LICENSE
 MANIFEST
 Makefile.PL
-test.pl
 README
+lib/Class/Autouse.pm
+t/01_main.t

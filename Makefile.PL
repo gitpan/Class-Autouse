@@ -1,7 +1,13 @@
+require 5.000;
 use ExtUtils::MakeMaker;
-# See lib/ExtUtils/MakeMaker.pm for details of how to influence
-# the contents of the Makefile that is written.
 WriteMakefile(
-    'NAME'	=> 'Class::Autouse',
-    'VERSION_FROM' => 'Autouse.pm', # finds $VERSION
+	'NAME'         => 'Class::Autouse',
+	'VERSION_FROM' => 'lib/Class/Autouse.pm',
+	'PREREQ_PM'    => {
+		Test::Simple
+	},	
+	($] >= 5.005) ? (
+		'AUTHOR'   => 'Adam Kennedy (adam@ali.as)',
+		'ABSTRACT' => 'Defer loading of one or more classes.'
+	) : (),
 );

@@ -1,5 +1,10 @@
 Revision history for Perl extension Class::Autouse.
 
+0.7  Fri Nov 1 15:52:01 2002
+        - Debugging Fix
+        - Remove some warnings
+        - Documentation updates
+
 0.6  Wed Apr 3 20:31:41 2002
         - Fixed a serious bug that was missed.
         - Added a load cache to cut back on stat calls
