@@ -5,7 +5,7 @@ WriteMakefile(
 	'VERSION_FROM' => 'lib/Class/Autouse.pm',
 	'PREREQ_PM'    => {
 		'Carp'       => 0,
-		'List::Util' => 0,
+		'List::Util' => 1.11,
 		'Test::More' => 0,
 		'File::Spec' => 0.82,
 	},

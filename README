@@ -5,7 +5,7 @@ SYNOPSIS
       # Load a class on method call
       use Class::Autouse;
       Class::Autouse->autouse( 'CGI' );
-      print CGI->header();
+      print CGI->b('Wow!');
 
       # Use as a pragma
       use Class::Autouse qw{CGI};
@@ -45,14 +45,14 @@ DESCRIPTION
     inforamtion about when the problem has actually occurred is required.
     Debug messages are written to STDOUT, and will look something like
 
-     Class::Autouse::autouse_recursive( 'AppCore' )
-      Class::Autouse::_recursive( 'AppCore', 'load' )
-       Class::Autouse::load( 'AppCore' )
-       Class::Autouse::_child_classes( 'AppCore' )
-       Class::Autouse::load( 'AppCore::Export' )
-        Class::Autouse::_file_exists( 'AppCore/Export.pm' )
-        Class::Autouse::load -> Loading in AppCore/Export.pm
-       Class::Autouse::load( 'AppCore::Cache' )
+     Class::Autouse::autouse_recursive( 'Foo' )
+      Class::Autouse::_recursive( 'Foo', 'load' )
+       Class::Autouse::load( 'Foo' )
+       Class::Autouse::_child_classes( 'Foo' )
+       Class::Autouse::load( 'Foo::Bar' )
+        Class::Autouse::_file_exists( 'Foo/Bar.pm' )
+        Class::Autouse::load -> Loading in Foo/Bar.pm
+       Class::Autouse::load( 'Foo::More' )
         etc...
 
   Developer Mode
@@ -79,7 +79,7 @@ DESCRIPTION
 
         use Class::Autouse qw{:superloader};
 
-        print CGI->header;
+        print CGI->b('Wow!');
 
     The super loader can be turned on with either the
     Class::Autouse->superloader method, or the :superloader pragma argument.
@@ -117,28 +117,28 @@ DESCRIPTION
     memory.
 
 METHODS
-  autouse( $class )
+  autouse $class
     The autouse method sets the class to be loaded as required.
 
-  load( $class )
+  load $class
     The load method loads one or more classes into memory. This is
     functionally equivalent to using require to load the class list in,
     except that load will detect and remove the autoloading hook from a
     previously autoused class, whereas as use effectively ignore the class,
     and not load it.
 
-  devel()
+  devel
     The devel method sets development mode on (argument of 1) or off
     (argument of 0)
 
-  superloader()
+  superloader
     The superloader method turns on the super loader. Please note that once
     you have turned the superloader on, it cannot be turned off. This is due
     to code that might be relying on it being there not being able to
     autoload it's classes when another piece of code decides they don't want
     it any more, and turns the superloader off.
 
-  class_exists( $class )
+  class_exists $class
     Handy method when doing the sort of jobs that Class::Autouse does. Given
     a class name, it will return true if the class can be loaded ( i.e. in
     @INC ), false if the class can't be loaded, and undef if the class name
@@ -147,10 +147,10 @@ METHODS
     Note that this does not actually load the class, just tests to see if it
     can be loaded. Loading can still fail.
 
-  autouse_recursive( $class )
+  autouse_recursive $class
     The same as the "autouse" method, but autouses recursively
 
-  load_recursive( $class )
+  load_recursive $class
     The same as the "load" method, but loads recursively. Great for checking
     that a large class tree that might not always be loaded will load
     correctly.
@@ -174,9 +174,9 @@ SEE ALSO
     autoload, autoclass
 
 COPYRIGHT
-    Copyright (c) 2002 Adam Kennedy. All rights reserved. This program is
-    free software; you can redistribute it and/or modify it under the same
-    terms as Perl itself.
+    Copyright (c) 2002-2004 Adam Kennedy. All rights reserved. This program
+    is free software; you can redistribute it and/or modify it under the
+    same terms as Perl itself.
 
     The full text of the license can be found in the LICENSE file included
     with this module.

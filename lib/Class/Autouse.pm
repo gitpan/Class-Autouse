@@ -2,51 +2,64 @@ package Class::Autouse;
 
 # See POD at end of file for documentation
 
-### Memory Overhead: 196K
+### Memory Overhead: 180K
 
 require 5.005;
 use strict;
-no strict 'refs';
+no strict 'refs'; # We do a LOT of bad ref stuff
 use UNIVERSAL ();
 
-# Become an exporter so we don't get
-# complaints when we act as a pragma.
+# Become an exporter so we don't get complaints when we act as a pragma.
+# I don't fully understand the reason for this, but it works.
 use base 'Exporter';
 
-# There are some things we use
+# Load required modules
 use Carp       ();
 use File::Spec ();
 use List::Util ();
 
 # Globals
-use vars qw{$VERSION $DEBUG};
-use vars qw{$devel $superloader};
-use vars qw{%chased %loaded %special %bad};
-use vars qw{*_original_can};
+use vars qw{$VERSION $DEBUG $UNIX $DEVEL $SUPERLOAD}; # Load environment
+use vars qw{$HOOKS %chased %loaded %special %bad};    # Working data
+use vars qw{*_UNIVERSAL_can};                         # Subroutine storage
 BEGIN {
-	$VERSION = '1.03';
+	$VERSION = '1.04';
 	$DEBUG   = 0;
 
-	# Using Class::Autouse in a mod_perl situation can be dangerous, 
-	# as it can clash badly with autoreloaders such as Apache::Reload.
+	# Detect Unix file semantics
+	$UNIX = $File::Spec::ISA[0] eq 'File::Spec::Unix';
+
+	# We play with UNIVERSAL::can at times, so save a backup copy
+	*_UNIVERSAL_can = *UNIVERSAL::can{CODE};
+
+	# Using Class::Autouse in a mod_perl situation can be dangerous,
+	# as it can clash badly with auto-reloaders such as Apache::Reload.
 	# So ALWAYS run in devel mode under mod_perl. Since they should
-	# probably be loading modules at startup time ( in the parent 
+	# probably be loading modules at startup time ( in the parent
 	# process ) anyway, this is a good thing.
-	$devel       = !! $ENV{MOD_PERL};
-	$superloader = 0;
+	$DEVEL = !! $ENV{MOD_PERL};
+
+	# We always start with the superloader off
+	$SUPERLOAD = 0;
+
+	# How many AUTOLOAD hooks do we have in place
+	$HOOKS = 0;
 
 	# Anti-loop protection. "Have we tried to autoload a method before?"
-	# Contains the fully referenced sub name.
+	# Contains fully referenced sub names.
 	%chased = ();
 
 	# ERRATA
 	# Special classes are internal and should be left alone.
-	# Loaded modules are those we should assume to be loaded already.
-	# Bad classes are those that are irrepairably incompatible with us.
+	# Loaded modules are those already loaded by us.
+	# Bad classes are those that are incompatible with us.
 	%special = map { $_ => 1 } qw{CORE main ARRAY HASH SCALAR REF UNIVERSAL};
 	%loaded  = map { $_ => 1 } qw{UNIVERSAL Exporter Carp File::Spec};
 	%bad     = map { $_ => 1 } qw{IO::File};
 }
+
+# Define prototypes
+sub _class_file($);
 
 
 
@@ -60,7 +73,8 @@ BEGIN {
 sub devel {
 	_debug(\@_, 1) if $DEBUG;
 
-	$devel = ($_[1] and ! $ENV{MOD_PERL}) ? 1 : 0;
+	return 1 if $ENV{MOD_PERL};
+	$DEVEL = !! $_[1];
 }
 
 # Happy Fun Super Loader!
@@ -69,20 +83,26 @@ sub devel {
 sub superloader {
 	_debug(\@_ ,1) if $DEBUG;
 
-	return 1 if $superloader;
+	unless ( $SUPERLOAD ) {
+		# Overwrite UNIVERSAL::AUTOLOAD and catch any
+		# UNIVERSAL::DESTROY calls so they don't trigger
+		# UNIVERSAL::AUTOLOAD. Anyone handling DESTROY calls
+		# via an AUTOLOAD should be summarily shot.
+		*UNIVERSAL::AUTOLOAD = \&_AUTOLOAD;
+		*UNIVERSAL::DESTROY  = \&_DESTROY;
 
-	# Overwrite UNIVERSAL::AUTOLOAD and also catch any
-	# DESTROY calls that make it to UNIVERSAL, so they
-	# don't trigger an AUTOLOAD call.
-	*UNIVERSAL::AUTOLOAD = \&_autoload;
-	*UNIVERSAL::DESTROY = \&_destroy;
-	$superloader = 1;
+		# Because this will never go away, we increment $HOOKS,
+		# which will never be decremented, and this the UNIVERSAL::can
+		# hijack will never be removed.
+		__UPDATE_CAN() unless $HOOKS++;
+	}
+
+	$SUPERLOAD = 1;
 }
 
 # The main autouse sub
 sub autouse {
-	# Remove any reference to ourselves, to allow us to
-	# operate as a function, or a method
+	# Operate as a function or a method
 	shift if $_[0] eq 'Class::Autouse';
 	return 1 unless @_;
 
@@ -94,10 +114,10 @@ sub autouse {
 		if ( $class =~ s/^:// ) {
 			if ( $class eq 'superloader' ) {
 				# Turn on the superloader
-				Class::Autouse->superloader();
+				Class::Autouse->superloader;
 			} elsif ( $class eq 'devel' ) {
 				# Turn on devel mode
-				Class::Autouse->devel( 1 );
+				Class::Autouse->devel(1);
 			} elsif ( $class eq 'debug' ) {
 				# Turn on debugging
 				$DEBUG = 1;
@@ -107,34 +127,31 @@ sub autouse {
 		}
 
 		# Load now if in devel mode, or if it's a bad class
-		if ( $devel || $bad{$class} ) {
+		if ( $DEVEL || $bad{$class} ) {
 			Class::Autouse->load( $class );
 			next;
 		}
 
-		# Get the file name
-		my $file = File::Spec->catfile( split( /::/, $class) ) . '.pm';
-
 		# Does the file for the class exist?
+		my $file = _class_file $class;
 		next if exists $INC{$file};
 		unless ( _file_exists($file) ) {
 			_cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
 		}
 
-		# Don't actually do anything if the superloader is on
-		next if $superloader;
+		# Don't actually do anything if the superloader is on.
+		# It will catch all AUTOLOAD calls.
+		next if $SUPERLOAD;
 
 		# Add the AUTOLOAD hook and %INC lock to prevent 'use'ing
-		*{"${class}::AUTOLOAD"} = \&_autoload;
+		*{"${class}::AUTOLOAD"} = \&_AUTOLOAD;
 		$INC{$file} = 'Class::Autouse';
+
+		# When we add the first hook, hijack UNIVERSAL::can
+		__UPDATE_CAN() unless $HOOKS++;
 	}
 
 	1;
-}
-
-# Link import to autouse, so we can act as a pragma
-BEGIN {
-	*import = *autouse;
 }
 
 
@@ -190,7 +207,7 @@ sub can_call_methods {
 	_debug(\@_, 1) if $DEBUG;
 
 	# Is it loaded already, or is the file in %INC
-	_namespace_occupied( $_[1] ) or exists $INC{ File::Spec->catfile( split( /::/, $_[1]) ) . '.pm' };
+	_namespace_occupied($_[1]) or exists $INC{ _class_file $_[1] };
 }
 
 # Recursive methods currently only work withing the scope of the single @INC
@@ -202,10 +219,10 @@ sub autouse_recursive {
 
 	# Just load if in devel mode
 	my $class = $_[1];
-	return Class::Autouse->load_recursive( $class ) if $devel;
+	return Class::Autouse->load_recursive( $class ) if $DEVEL;
 
 	# Don't need to do anything if the super loader is on
-	return 1 if $superloader;
+	return 1 if $SUPERLOAD;
 
 	# Find all the child classes, and hand them to the autouse method
 	Class::Autouse->autouse( $class, _child_classes($class) );
@@ -235,7 +252,7 @@ sub load_recursive {
 # to enable the autoload functionality
 
 # Get's linked via the symbol table to any AUTOLOADs are required
-sub _autoload {
+sub _AUTOLOAD {
 	_debug(\@_, 0, ", AUTOLOAD = '$Class::Autouse::AUTOLOAD'") if $DEBUG;
 
 	# Loop detection ( Just in case )
@@ -243,14 +260,14 @@ sub _autoload {
 	_cry( "Undefined subroutine &$method called" ) if ++$chased{ $method } > 10;
 
 	# Don't bother with special classes
-	my ($class, $function) = $method =~ m/^(.*)::(.*)$/o;
+	my ($class, $function) = $method =~ m/^(.*)::(.*)$/s;
 	_cry( "Undefined subroutine \&$method called" ) if $special{$class};
 
 	# Load the class and it's dependancies, and get the search path
 	my @search = Class::Autouse->load($class);
 
 	# Find and go to the named method
-	my $found = List::Util::first { defined *{"$_\::$function"}{CODE} } @search;
+	my $found = List::Util::first { defined *{"${_}::$function"}{CODE} } @search;
 	goto &{"${found}::$function"} if $found;
 
 	# Check for package AUTOLOADs
@@ -267,25 +284,25 @@ sub _autoload {
 }
 
 # This just handles the call and does nothing
-sub _destroy { _debug(\@_) if $DEBUG }
+sub _DESTROY { _debug(\@_) if $DEBUG }
 
 # This is the replacement for UNIVERSAL::can
 sub _can {
 	my $class = ref $_[0] || $_[0] || return undef;
 
 	# Shortcut for the most likely cases
-	goto &_original_can if $loaded{$class} or defined @{"${class}::ISA"};
+	goto &_UNIVERSAL_can if $loaded{$class} or defined @{"${class}::ISA"};
 
 	# Does it look like a package?
-	return undef unless $class =~ qr/^[^\W\d]\w*(?:(?:'|::)[^\W\d]\w*)*$/;
+	return undef unless $class =~ qr/^[^\W\d]\w*(?:(?:'|::)[^\W\d]\w*)*$/o;
 
 	# Do we try to load the class
 	my $load = 0;
-	my $file = File::Spec->catfile( split( /::/, $class) ) . '.pm';
+	my $file = _class_file $class;
 	if ( defined $INC{$file} and $INC{$file} eq 'Class::Autouse' ) {
 		# It's an autoused class
 		$load = 1;
-	} elsif ( ! $superloader ) {
+	} elsif ( ! $SUPERLOAD ) {
 		# Superloader isn't on, don't load
 		$load = 0;
 	} elsif ( _namespace_occupied($class) ) {
@@ -306,7 +323,7 @@ sub _can {
 	eval { Class::Autouse->load($class) } if $load;
 
 	# Hand off to the real UNIVERSAL::can
-	goto &_original_can;
+	goto &_UNIVERSAL_can;
 }
 
 
@@ -318,16 +335,16 @@ sub _can {
 
 # Load a single class
 sub _load {
-	_debug(\@_, 1) if $DEBUG;
+	_debug(\@_) if $DEBUG;
 
 	# Don't attempt to load special classes
 	my $class = shift or _cry( "Did not specify a class to load" );
 	return 1 if $special{$class};
 
 	# Run some checks
-	my $file = File::Spec->catfile( split( /::/, $class) ) . '.pm';
+	my $file = _class_file $class;
 	if ( defined $INC{$file} ) {
-		# If the %INC lock is set to any other value, the file is 
+		# If the %INC lock is set to any other value, the file is
 		# already loaded. We do not need to do anything.
 		return $loaded{$class} = 1 if $INC{$file} ne 'Class::Autouse';
 
@@ -347,7 +364,11 @@ sub _load {
 
 	# Load the file
 	print _call_depth(1) . "  Class::Autouse::load -> Loading in $file\n" if $DEBUG;
-	eval { require $file }; _cry($@) if $@;
+	eval { CORE::require $file }; _cry($@) if $@;
+
+	# Give back UNIVERSAL::can if there are no other hooks
+	__UPDATE_CAN() if ! --$HOOKS;
+
 	$loaded{$class} = 1;
 }
 
@@ -356,11 +377,8 @@ sub _load {
 sub _child_classes {
 	_debug(\@_) if $DEBUG;
 
-	# Get the classes file name
-	my $base_class = shift;
-	my $base_file = File::Spec->catfile( split( /::/, $base_class) ) . '.pm';
-
 	# Find where it is in @INC
+	my $base_file = _class_file shift;
 	my $inc_path = List::Util::first {
 		-f File::Spec->catfile( $_, $base_file )
 		} @INC or return;
@@ -416,7 +434,7 @@ sub _child_classes {
 #####################################################################
 # Private support methods
 
-# Does a class or file exists somewhere in our include path. For 
+# Does a class or file exists somewhere in our include path. For
 # convenience, returns the unresolved file name ( even if passed a class )
 sub _file_exists {
 	_debug(\@_) if $DEBUG;
@@ -426,9 +444,7 @@ sub _file_exists {
 	return undef if $file =~ m/(?:\012|\015)/o;
 
 	# If provided a class name, convert it
-	if ( $file =~ /::/o ) {
-		$file = File::Spec->catfile( split( /::/, $file) ) . '.pm';
-	}
+	$file = _class_file $file if $file =~ /::/o;
 
 	# Scan @INC for the file
 	foreach ( @INC ) {
@@ -439,7 +455,7 @@ sub _file_exists {
 }
 
 # Is a namespace occupied by anything significant
-sub _namespace_occupied {
+sub _namespace_occupied($) {
 	_debug(\@_) if $DEBUG;
 
 	# Handle the most likely case
@@ -455,6 +471,9 @@ sub _namespace_occupied {
 	'';
 }
 
+# For a given class, get the file name
+sub _class_file($) { join( '/', split /(?:\'|::)/, shift ) . '.pm' }
+
 # Establish our call depth
 sub _call_depth {
 	my $spaces = shift;
@@ -464,7 +483,7 @@ sub _call_depth {
 	my $level = 0;
 	while( $level++ < 1000 ) {
 		my @call = caller( $level );
-		my ($subclass) = $call[3] =~ m/^(.*)::/o;
+		my ($subclass) = $call[3] =~ m/^(.*)::/so;
 		unless ( defined $subclass and $subclass eq 'Class::Autouse' ) {
 			# Subtract 1 for this sub's call
 			$level -= 1;
@@ -507,24 +526,24 @@ sub _debug {
 #####################################################################
 # Final Initialisation
 
-# Replace the UNIVERSAL::can sub with our own version
+# The __UPDATE_CAN function is intended to turn our hijacking of UNIVERSAL::can
+# on or off, depending on whether we have any live hooks. The idea being, if we
+# don't have any, why are we intercepting UNIVERSAL::can calls?
+BEGIN { eval( $] >= 5.006 ? <<'END_NEW_PERL' : <<'END_OLD_PERL'); die $@ if $@ }
+sub __UPDATE_CAN {
+	no warnings;
+	*UNIVERSAL::can = $HOOKS ? *_can{CODE} : *_UNIVERSAL_can{CODE};
+}
+END_NEW_PERL
+sub __UPDATE_CAN {
+	local $^W = 0;
+	*UNIVERSAL::can = $HOOKS ? *_can{CODE} : *_UNIVERSAL_can{CODE};
+}
+END_OLD_PERL
+
 BEGIN {
-	# We don't need to do this if we are forced into devel mode
-	# by the whole mod_perl situation
-	unless ( $ENV{MOD_PERL} ) {
-		# Copy the current UNIVERSAL::can
-		*_original_can = *UNIVERSAL::can{CODE};
-	
-		# Replace UNIVERSAL::can, using different methods of disabling warnings
-		# depending if we have access to the warnings module or not.
-		if ( class_exists('warnings') ) {
-			no warnings;
-			*UNIVERSAL::can = *Class::Autouse::_can{CODE};
-		} else {
-			local $^W = 0;
-			*UNIVERSAL::can = *Class::Autouse::_can{CODE};
-		}
-	}
+	# Linking import to autouse lets us act as a pragma
+	*import = *autouse;
 }
 
 1;
@@ -542,7 +561,7 @@ Class::Autouse - Defer loading of one or more classes.
   # Load a class on method call
   use Class::Autouse;
   Class::Autouse->autouse( 'CGI' );
-  print CGI->header();
+  print CGI->b('Wow!');
 
   # Use as a pragma
   use Class::Autouse qw{CGI};
@@ -586,14 +605,14 @@ some more inforamtion about when the problem has actually
 occurred is required. Debug messages are written to STDOUT, and
 will look something like
 
- Class::Autouse::autouse_recursive( 'AppCore' )
-  Class::Autouse::_recursive( 'AppCore', 'load' )
-   Class::Autouse::load( 'AppCore' )
-   Class::Autouse::_child_classes( 'AppCore' )
-   Class::Autouse::load( 'AppCore::Export' )
-    Class::Autouse::_file_exists( 'AppCore/Export.pm' )
-    Class::Autouse::load -> Loading in AppCore/Export.pm
-   Class::Autouse::load( 'AppCore::Cache' )
+ Class::Autouse::autouse_recursive( 'Foo' )
+  Class::Autouse::_recursive( 'Foo', 'load' )
+   Class::Autouse::load( 'Foo' )
+   Class::Autouse::_child_classes( 'Foo' )
+   Class::Autouse::load( 'Foo::Bar' )
+    Class::Autouse::_file_exists( 'Foo/Bar.pm' )
+    Class::Autouse::load -> Loading in Foo/Bar.pm
+   Class::Autouse::load( 'Foo::More' )
     etc...
 
 =head2 Developer Mode
@@ -622,7 +641,7 @@ and is completely legal.
 
     use Class::Autouse qw{:superloader};
 
-    print CGI->header;
+    print CGI->b('Wow!');
 
 The super loader can be turned on with either the Class::Autouse->superloader
 method, or the :superloader pragma argument.
@@ -662,22 +681,22 @@ by the Apache child classes. It also saves HUGE amounts of memory.
 
 =head1 METHODS
 
-=head2 autouse( $class )
+=head2 autouse $class
 
 The autouse method sets the class to be loaded as required.
 
-=head2 load( $class )
+=head2 load $class
 
 The load method loads one or more classes into memory. This is functionally
 equivalent to using require to load the class list in, except that load
 will detect and remove the autoloading hook from a previously autoused
 class, whereas as use effectively ignore the class, and not load it.
 
-=head2 devel()
+=head2 devel
 
 The devel method sets development mode on (argument of 1) or off (argument of 0)
 
-=head2 superloader()
+=head2 superloader
 
 The superloader method turns on the super loader. Please note that once you
 have turned the superloader on, it cannot be turned off. This is due to
@@ -685,7 +704,7 @@ code that might be relying on it being there not being able to autoload it's
 classes when another piece of code decides they don't want it any more, and
 turns the superloader off.
 
-=head2 class_exists( $class )
+=head2 class_exists $class
 
 Handy method when doing the sort of jobs that Class::Autouse does. Given
 a class name, it will return true if the class can be loaded ( i.e. in @INC ),
@@ -694,11 +713,11 @@ false if the class can't be loaded, and undef if the class name is invalid.
 Note that this does not actually load the class, just tests to see if it can
 be loaded. Loading can still fail.
 
-=head2 autouse_recursive( $class )
+=head2 autouse_recursive $class
 
 The same as the C<autouse> method, but autouses recursively
 
-=head2 load_recursive( $class )
+=head2 load_recursive $class
 
 The same as the C<load> method, but loads recursively. Great for checking that
 a large class tree that might not always be loaded will load correctly.
@@ -726,7 +745,7 @@ autoload, autoclass
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002 Adam Kennedy. All rights reserved.
+Copyright (c) 2002-2004 Adam Kennedy. All rights reserved.
 This program is free software; you can redistribute
 it and/or modify it under the same terms as Perl itself.
 

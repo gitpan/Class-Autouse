@@ -14,7 +14,8 @@ use lib catdir( curdir(), 'modules' ),
         catdir( 't', 'modules' ),
         catdir( updir(), updir(), 'modules' );
 use UNIVERSAL 'isa';
-use Test::More tests => 14;
+use Test::More tests => 18;
+use Scalar::Util 'refaddr';
 
 BEGIN { $| = 1 }
 
@@ -49,9 +50,16 @@ ok( ! Class::Autouse->class_exists( 'Class::Autouse::Nonexistant' ), '->class_ex
 # This should fail in 0.8, 0.9 and 1.0
 # Does ->can for an autoused class correctly load the class and find the method.
 my $class = 'D';
+ok( refaddr(*UNIVERSAL::can{CODE}), "We know which version of UNIVERSAL::can we are using" );
+is( refaddr(*UNIVERSAL::can{CODE}), refaddr(*Class::Autouse::_UNIVERSAL_can{CODE}),
+	"Before autoloading, UNIVERSAL::can is in it's original state, and has been backed up");
 ok( Class::Autouse->autouse( $class ), "Test class '$class' autoused ok" );
+is( refaddr(*UNIVERSAL::can{CODE}), refaddr(*Class::Autouse::_can{CODE}),
+	"After autoloading, UNIVERSAL::can has been correctly hijacked");
 ok( $class->can('method2'), "'can' found sub 'method2' in autoused class '$class'" );
 ok( $Class::Autouse::loaded{$class}, "'can' loaded class '$class' while looking for 'method2'" );
+is( refaddr(*UNIVERSAL::can{CODE}), refaddr(*Class::Autouse::_UNIVERSAL_can{CODE}),
+	"When all classes are loaded, UNIVERSAL::can reverts back to the original states");
 
 # Use the loaded hash again to avoid a warning
 $_ = $Class::Autouse::loaded{$class};

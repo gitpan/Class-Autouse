@@ -1,5 +1,10 @@
 Revision history for Perl extension Class::Autouse.
 
+1.04 Mon Jul  6 2004
+	- Only hijack UNIVERSAL::can for the period that we have
+	  live autoload hooks
+	- Various other small improvements
+
 1.03 Mon Dec  8 2003
 	- Adding another couple of minor error validating changes
 

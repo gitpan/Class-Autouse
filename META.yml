@@ -1,5 +1,4 @@
 name:         Class-Autouse
-version:      1.03
 version_from: lib/Class/Autouse.pm
 installdirs:  site
 license:      perl
@@ -7,7 +6,7 @@ requires:
   perl:                          5.005
   Carp:                          0
   File::Spec:                    0.82
-  List::Util:                    0
+  List::Util:                    1.11
 build_requires:
   Test::More:                    0
 private:
