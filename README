@@ -156,9 +156,9 @@ METHODS
     correctly.
 
 SUPPORT
-    Bugs should be reported via the CPAN bug tracker at
+    Bugs should be always be reported via the CPAN bug tracker at
 
-    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse>
+    <http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class-Autouse>
 
     For other issues, or commercial enhancement or support, contact the
     author.
@@ -172,9 +172,10 @@ SEE ALSO
     autoload, autoclass
 
 COPYRIGHT
-    Copyright (c) 2002-2004 Adam Kennedy. All rights reserved. This program
-    is free software; you can redistribute it and/or modify it under the
-    same terms as Perl itself.
+    Copyright (c) 2002 - 2005 Adam Kennedy. All rights reserved.
+
+    This program is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
 
     The full text of the license can be found in the LICENSE file included
     with this module.

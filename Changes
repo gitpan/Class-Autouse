@@ -1,5 +1,11 @@
 Revision history for Perl extension Class::Autouse.
 
+1.15 Wed Feb  9 2005
+	- Reorganisation of method order over the last half a dozen
+	  versions allowed some invalid uses of indirect object syntax
+	  to slip in. This was stupid of me, and I've gotten a lot more
+	  explicit in the calling of internal functions now.
+
 1.14 Wed Jan 19 2005
 	- Allowed a bug to slip in to autouse_recursive (resolved)
 	- Added regression test for the case

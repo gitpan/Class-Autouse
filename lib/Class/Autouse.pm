@@ -23,7 +23,7 @@ use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD};    # Load environment
 use vars qw{$HOOKS %chased %loaded %special %bad}; # Working data
 use vars qw{*_UNIVERSAL_can};                      # Subroutine storage
 BEGIN {
-	$VERSION = '1.14';
+	$VERSION = '1.15';
 	$DEBUG   = 0;
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
@@ -52,7 +52,6 @@ BEGIN {
 }
 
 # Define prototypes
-sub _class_file($);
 sub _cry($);
 
 
@@ -137,7 +136,7 @@ sub autouse {
 		}
 
 		# Does the file for the class exist?
-		my $file = _class_file $class;
+		my $file = _class_file($class);
 		next if exists $INC{$file};
 		unless ( _file_exists($file) ) {
 			my $inc = join ', ', @INC;
@@ -211,7 +210,7 @@ sub class_exists {
 # Returns 1 if the class can be used.
 sub can_call_methods {
 	_debug(\@_, 1) if $DEBUG;
-	_namespace_occupied $_[1] or exists $INC{_class_file $_[1]};
+	_namespace_occupied($_[1]) or exists $INC{_class_file($_[1])};
 }
 
 # Recursive methods currently only work withing the scope of the single @INC
@@ -300,14 +299,14 @@ sub _can {
 
 	# Do we try to load the class
 	my $load = 0;
-	my $file = _class_file $class;
+	my $file = _class_file($class);
 	if ( defined $INC{$file} and $INC{$file} eq 'Class::Autouse' ) {
 		# It's an autoused class
 		$load = 1;
 	} elsif ( ! $SUPERLOAD ) {
 		# Superloader isn't on, don't load
 		$load = 0;
-	} elsif ( _namespace_occupied $class ) {
+	} elsif ( _namespace_occupied($class) ) {
 		# Superloader is on, but there is something already in the class
 		# This can't be the autouse loader, because we would have caught
 		# that case already
@@ -344,7 +343,7 @@ sub _load ($) {
 	return 1 if $special{$class};
 
 	# Run some checks
-	my $file = _class_file $class;
+	my $file = _class_file($class);
 	if ( defined $INC{$file} ) {
 		# If the %INC lock is set to any other value, the file is
 		# already loaded. We do not need to do anything.
@@ -359,7 +358,7 @@ sub _load ($) {
 	} elsif ( ! _file_exists($file) ) {
 		# File doesn't exist. We might still be OK, if the class was
 		# defined in some other module that got loaded a different way.
-		return $loaded{$class} = 1 if _namespace_occupied( $class );
+		return $loaded{$class} = 1 if _namespace_occupied($class);
 		my $inc = join ', ', @INC;
 		_cry "Can't locate $file in \@INC (\@INC contains: $inc)";
 	}
@@ -380,7 +379,7 @@ sub _child_classes ($) {
 	_debug(\@_) if $DEBUG;
 
 	# Find where it is in @INC
-	my $base_file = _class_file shift;
+	my $base_file = _class_file(shift);
 	my $inc_path  = List::Util::first {
 		-f File::Spec->catfile($_, $base_file)
 		} @INC or return;
@@ -392,6 +391,7 @@ sub _child_classes ($) {
 	return 0 unless -d $child_path_full and -r _;
 
 	# Main scan loop
+	local *FILELIST;
 	my ($dir, @files, @modules) = ();
 	my @queue = ( $child_path );
 	while ( $dir = pop @queue ) {
@@ -445,7 +445,7 @@ sub _file_exists ($) {
 	return undef if $file =~ m/(?:\012|\015)/o;
 
 	# If provided a class name, convert it
-	$file = _class_file $file if $file =~ /::/o;
+	$file = _class_file($file) if $file =~ /::/o;
 
 	# Scan @INC for the file
 	foreach ( @INC ) {
@@ -737,9 +737,9 @@ a large class tree that might not always be loaded will load correctly.
 
 =head1 SUPPORT
 
-Bugs should be reported via the CPAN bug tracker at
+Bugs should be always be reported via the CPAN bug tracker at
 
-L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse>
+L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class-Autouse>
 
 For other issues, or commercial enhancement or support, contact the author.
 
@@ -751,11 +751,12 @@ Rob Napier (No longer involved), rnapier@employees.org
 
 =head1 SEE ALSO
 
-autoload, autoclass
+L<autoload>, L<autoclass>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2004 Adam Kennedy. All rights reserved.
+Copyright (c) 2002 - 2005 Adam Kennedy. All rights reserved.
+
 This program is free software; you can redistribute
 it and/or modify it under the same terms as Perl itself.
 
