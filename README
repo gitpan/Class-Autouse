@@ -9,13 +9,13 @@ SYNOPSIS
 
       # Use as a pragma
       use Class::Autouse qw{CGI};
-  
+
       # Turn on debugging
       use Class::Autouse qw{:debug};
-  
+
       # Turn on developer mode
       use Class::Autouse qw{:devel};
-  
+
       # Turn on the Super Loader
       use Class::Autouse qw{:superloader};
 
@@ -48,17 +48,13 @@ DESCRIPTION
      Class::Autouse::autouse_recursive( 'AppCore' )
       Class::Autouse::_recursive( 'AppCore', 'load' )
        Class::Autouse::load( 'AppCore' )
-        Class::Autouse::_class_file( 'AppCore' )
        Class::Autouse::_child_classes( 'AppCore' )
-        Class::Autouse::_class_file( 'AppCore' )
        Class::Autouse::load( 'AppCore::Export' )
-        Class::Autouse::_class_file( 'AppCore::Export' )
         Class::Autouse::_file_exists( 'AppCore/Export.pm' )
         Class::Autouse::load -> Loading in AppCore/Export.pm
        Class::Autouse::load( 'AppCore::Cache' )
-        Class::Autouse::_class_file( 'AppCore::Cache' )
         etc...
-   
+
   Developer Mode
     Class::Autouse features a developer mode. In developer mode, classes are
     loaded immediately, just like they would be with a normal 'use'
@@ -108,6 +104,18 @@ DESCRIPTION
     powerfull features in other areas, because the module can focus on just
     loading the modules, and not have to deal with importing.
 
+  mod_perl
+    The methods that Class::Autouse uses are not compatible with mod_perl.
+    In particular with reloader modules like Apache::Reload. Class::Autouse
+    detects the presence of mod_perl and acts as normal, but will always
+    load all classes immediately, equivalent to having developer mode
+    enabled.
+
+    This is actually beneficial, as under mod_perl classes should be
+    preloaded in the parent mod_perl process anyway, to prevent them having
+    to be loaded by the Apache child classes. It also saves HUGE amounts of
+    memory.
+
 METHODS
   autouse( $class )
     The autouse method sets the class to be loaded as required.
@@ -119,30 +127,30 @@ METHODS
     previously autoused class, whereas as use effectively ignore the class,
     and not load it.
 
-  devel
+  devel()
     The devel method sets development mode on (argument of 1) or off
     (argument of 0)
 
-  superloader
+  superloader()
     The superloader method turns on the super loader. Please note that once
     you have turned the superloader on, it cannot be turned off. This is due
     to code that might be relying on it being there not being able to
     autoload it's classes when another piece of code decides they don't want
     it any more, and turns the superloader off.
 
-  class_exists
+  class_exists( $class )
     Handy method when doing the sort of jobs that Class::Autouse does. Given
-    a class name, it will return 1 if the class can be loaded ( i.e. in @INC
-    ), 0 if the class can't be loaded, and undef if the class name is
-    invalid.
+    a class name, it will return true if the class can be loaded ( i.e. in
+    @INC ), false if the class can't be loaded, and undef if the class name
+    is invalid.
 
     Note that this does not actually load the class, just tests to see if it
     can be loaded. Loading can still fail.
 
-  autouse_recursive
+  autouse_recursive( $class )
     The same as the "autouse" method, but autouses recursively
 
-  load_recursive
+  load_recursive( $class )
     The same as the "load" method, but loads recursively. Great for checking
     that a large class tree that might not always be loaded will load
     correctly.
@@ -154,9 +162,9 @@ AUTHORS
             Adam Kennedy ( maintainer )
             cpan@ali.as
             http://ali.as/
-        
+
             Rob Napier
-            rnapier@employees.org 
+            rnapier@employees.org
 
 SEE ALSO
     autoload, autoclass

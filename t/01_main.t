@@ -1,19 +1,16 @@
-#!/usr/bin/perl
+#!/usr/bin/perl -w
 
 # Formal testing for Class::Autouse
 
 use strict;
-use lib '../../../../modules'; # For development testing
-use lib '../lib'; # For installation testing
+use File::Spec::Functions qw{:ALL};
+use lib catdir( updir(), updir(), 'modules' ),
+	catdir( curdir(), 'modules' ); # Development testing
+use lib catdir( 't', 'modules' ); # Installation testing
 use UNIVERSAL 'isa';
-use Test::Simple tests => 4;
+use Test::More tests => 9;
 
-# Set up any needed globals
-use vars qw{$loaded};
-BEGIN {
-	$loaded = 0;
-	$| = 1;
-}
+BEGIN { $| = 1 }
 
 
 
@@ -22,20 +19,33 @@ BEGIN {
 BEGIN {
 	ok( $] >= 5.005, "Your perl is new enough" );
 }
-	
+
 
 
 
 
 # Does the module load
-END { ok( 0, 'Class::Autouse loads' ) unless $loaded; }
-use Class::Autouse;
-$loaded = 1;
-ok( 1, 'Class::Autouse loads' );
-
+use_ok( 'Class::Autouse' );
 
 
 
 # Test the class_exists class detector
 ok( Class::Autouse->class_exists( 'Class::Autouse' ), '->class_exists works for existing class' );
 ok( ! Class::Autouse->class_exists( 'Class::Autouse::Nonexistant' ), '->class_exists works for non-existant class' );
+
+
+
+
+# Test the can bug
+ok( Class::Autouse->load( 'D' ), 'Test class D loads ok' );
+ok( D->can('method'), "'can' found sub 'method' in D" );
+
+
+
+
+# This should fail below Class::Autouse 0.8
+# If class 'F' isa 'E' and method 'foo' in F uses SUPER::foo, make sure it find the method 'foo' in E.
+ok( Class::Autouse->autouse( 'E' ), 'Test class E autouses ok' );
+ok( Class::Autouse->autouse( 'F' ), 'Test class F autouses ok' );
+ok( F->foo eq 'Return value from E->foo', 'Class->SUPER::method works safely' );
+

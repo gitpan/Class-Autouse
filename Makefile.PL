@@ -4,10 +4,13 @@ WriteMakefile(
 	'NAME'         => 'Class::Autouse',
 	'VERSION_FROM' => 'lib/Class/Autouse.pm',
 	'PREREQ_PM'    => {
-		Test::Simple
-	},	
+		'Carp'       => 0,
+		'List::Util' => 0,
+		'Test::More' => 0,
+		'File::Spec' => 0.82,
+	},
 	($] >= 5.005) ? (
-		'AUTHOR'   => 'Adam Kennedy (adam@ali.as)',
-		'ABSTRACT' => 'Defer loading of one or more classes.'
+		'AUTHOR'   => 'Adam Kennedy (cpan@ali.as)',
+		'ABSTRACT' => 'Defer loading of one or more classes'
 	) : (),
 );

@@ -1,7 +1,15 @@
 Changes
 LICENSE
-MANIFEST
+MANIFEST			This list of files
 Makefile.PL
 README
 lib/Class/Autouse.pm
+lib/Class/Autouse/Parent.pm
+modules/A.pm
+modules/A/B.pm
+modules/C.pm
+modules/D.pm
+modules/E.pm
+modules/F.pm
 t/01_main.t
+t/02_parent.t
