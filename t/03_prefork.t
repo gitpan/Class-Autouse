@@ -21,9 +21,18 @@ BEGIN {
 	lib->import( catdir( curdir(), 'modules' ) );
 }
 
-use Test::More tests => 5;
-use prefork ();
+# We don't need to run this if prefork is not installed
+my @test_plan;
+BEGIN {
+	eval { require prefork; };
+	@test_plan = $@
+		? ('skip_all', 'prefork.pm is not installed')
+		: (tests => 5);
+}
+use Test::More @test_plan;
 use Class::Autouse 'C';
+
+
 
 ok( ! $Class::Autouse::DEVEL, '$Class::Autouse::DEVEL is false' );
 is( $INC{"C.pm"}, 'Class::Autouse', 'C.pm is autoused' );

@@ -1,5 +1,5 @@
 NAME
-    Class::Autouse - Defer loading of one or more classes.
+    Class::Autouse - Run-time class loading on first method call
 
 SYNOPSIS
       # Load a class on method call

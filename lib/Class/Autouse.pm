@@ -17,30 +17,25 @@ use base 'Exporter';
 use Carp       ();
 use File::Spec ();
 use List::Util ();
-use prefork    ();
 
 # Globals
-use vars qw{$VERSION $DEBUG $UNIX $DEVEL $SUPERLOAD}; # Load environment
-use vars qw{$HOOKS %chased %loaded %special %bad};    # Working data
-use vars qw{*_UNIVERSAL_can};                         # Subroutine storage
+use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD};    # Load environment
+use vars qw{$HOOKS %chased %loaded %special %bad}; # Working data
+use vars qw{*_UNIVERSAL_can};                      # Subroutine storage
 BEGIN {
-	$VERSION = '1.10';
+	$VERSION = '1.11';
 	$DEBUG   = 0;
-
-	# Detect Unix file semantics
-	$UNIX = $File::Spec::ISA[0] eq 'File::Spec::Unix';
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
 	*_UNIVERSAL_can = *UNIVERSAL::can{CODE};
 
 	# Start with devel mode off.
-	# prefork will turn it on if it needs to.
 	$DEVEL = 0;
 
 	# We always start with the superloader off
 	$SUPERLOAD = 0;
 
-	# How many AUTOLOAD hooks do we have in place
+	# AUTOLOAD hook counter
 	$HOOKS = 0;
 
 	# Anti-loop protection. "Have we tried to autoload a method before?"
@@ -58,6 +53,7 @@ BEGIN {
 
 # Define prototypes
 sub _class_file($);
+sub _cry($);
 
 
 
@@ -67,34 +63,28 @@ sub _class_file($);
 # Configuration and Setting up
 
 # Developer mode flag.
-# Don't let them turn it off if we forced on.
+# Cannot be turned off once turned on.
 sub devel {
 	_debug(\@_, 1) if $DEBUG;
 
-	# Handle shortcuts
-	if ( $prefork::FORKING and ! $_[1] ) {
-		return 1;
-	}
+	# Enable if not already
 	return 1 if $DEVEL;
-
-	# Enable devel mode
 	$DEVEL = 1;
 
-	# Load all outstanding modules
+	# Load any unloaded modules.
+	# Most of the time there should be nothing here.
 	foreach my $class ( grep { $INC{$_} eq 'Class::Autouse' } keys %INC ) {
 		$class =~ s/\//::/;
 		$class =~ s/\.pm$//i;
 		Class::Autouse->load($class);
 	}
-
-	1;
 }
 
 # Happy Fun Super Loader!
 # The process here is to replace the &UNIVERSAL::AUTOLOAD sub
 # ( which is just a dummy by default ) with a flexible class loader.
 sub superloader {
-	_debug(\@_ ,1) if $DEBUG;
+	_debug(\@_, 1) if $DEBUG;
 
 	unless ( $SUPERLOAD ) {
 		# Overwrite UNIVERSAL::AUTOLOAD and catch any
@@ -149,7 +139,8 @@ sub autouse {
 		my $file = _class_file $class;
 		next if exists $INC{$file};
 		unless ( _file_exists($file) ) {
-			_cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
+			my $inc = join ', ', @INC;
+			_cry "Can't locate $file in \@INC (\@INC contains: $inc)";
 		}
 
 		# Don't actually do anything if the superloader is on.
@@ -167,6 +158,9 @@ sub autouse {
 	1;
 }
 
+# Import behaves the same as autouse
+sub import { shift->autouse(@_) }
+
 
 
 
@@ -178,7 +172,7 @@ sub autouse {
 sub load {
 	_debug(\@_, 1) if $DEBUG;
 
-	my $class = $_[1] or _cry( "No class name specified to load" );
+	my $class = $_[1] or _cry 'No class name specified to load';
 	return 1 if $loaded{$class};
 
 	# Load the entire ISA tree
@@ -269,12 +263,12 @@ sub _AUTOLOAD {
 	_debug(\@_, 0, ", AUTOLOAD = '$Class::Autouse::AUTOLOAD'") if $DEBUG;
 
 	# Loop detection ( Just in case )
-	my $method = $Class::Autouse::AUTOLOAD or _cry( "Missing method name" );
-	_cry( "Undefined subroutine &$method called" ) if ++$chased{ $method } > 10;
+	my $method = $Class::Autouse::AUTOLOAD or _cry 'Missing method name';
+	_cry "Undefined subroutine &$method called" if ++$chased{ $method } > 10;
 
 	# Don't bother with special classes
 	my ($class, $function) = $method =~ m/^(.*)::(.*)$/s;
-	_cry( "Undefined subroutine \&$method called" ) if $special{$class};
+	_cry "Undefined subroutine &$method called" if $special{$class};
 
 	# Load the class and it's dependancies, and get the search path
 	my @search = Class::Autouse->load($class);
@@ -293,7 +287,7 @@ sub _AUTOLOAD {
 	}
 
 	# Can't find the method anywhere. Throw the same error Perl does.
-	_cry( "Can't locate object method \"$function\" via package \"$class\"" );
+	_cry "Can't locate object method \"$function\" via package \"$class\"";
 }
 
 # This just handles the call and does nothing
@@ -351,7 +345,7 @@ sub _load {
 	_debug(\@_) if $DEBUG;
 
 	# Don't attempt to load special classes
-	my $class = shift or _cry( "Did not specify a class to load" );
+	my $class = shift or _cry 'Did not specify a class to load';
 	return 1 if $special{$class};
 
 	# Run some checks
@@ -370,14 +364,14 @@ sub _load {
 	} elsif ( ! _file_exists($file) ) {
 		# File doesn't exist. We might still be OK, if the class was
 		# defined in some other module that got loaded a different way.
-		_namespace_occupied( $class )
-			? return $loaded{$class} = 1
-			: _cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
+		return $loaded{$class} = 1 if _namespace_occupied( $class );
+		my $inc = join ', ', @INC;
+		_cry "Can't locate $file in \@INC (\@INC contains: $inc)";
 	}
 
 	# Load the file
 	print _call_depth(1) . "  Class::Autouse::load -> Loading in $file\n" if $DEBUG;
-	eval { CORE::require $file }; _cry($@) if $@;
+	eval { CORE::require $file }; _cry $@ if $@;
 
 	# Give back UNIVERSAL::can if there are no other hooks
 	__UPDATE_CAN() if ! --$HOOKS;
@@ -510,7 +504,7 @@ sub _call_depth {
 }
 
 # Die gracefully
-sub _cry {
+sub _cry ($) {
 	_debug() if $DEBUG;
 
 	local $Carp::CarpLevel;
@@ -520,11 +514,11 @@ sub _cry {
 
 # Adaptive debug print generation
 sub _debug {
-	my $args = shift;
-	my $method = !! shift;
+	my $args    = shift;
+	my $method  = !! shift;
 	my $message = shift || '';
-	my @c = caller(1);
-	my $msg = _call_depth(1) . $c[3];
+	my @c       = caller(1);
+	my $msg     = _call_depth(1) . $c[3];
 	if ( ref $args ) {
 		my @mapped = map { "'$_'" } @$args;
 		shift @mapped if $method;
@@ -556,13 +550,18 @@ sub __UPDATE_CAN {
 }
 END_OLD_PERL
 
-# A few things that need to happen at BEGIN-time, but last
 BEGIN {
-	# Linking import to autouse lets us act as a pragma
-	*import = *autouse;
-
-	# Go into devel mode when prefork is enabled
-	prefork::notify( sub { Class::Autouse->devel(1) } );
+	# Optional integration with prefork.pm (if installed)
+	eval { require prefork };
+	if ( $@ ) {
+		# prefork is not installed.
+		# Do manual detection of mod_perl
+		$DEVEL = 1 if $ENV{MOD_PERL};
+	} else {
+		# Go into devel mode when prefork is enabled
+		$loaded{prefork} = 1;
+		prefork::notify( sub { Class::Autouse->devel(1) } );
+	}
 }
 
 1;
@@ -573,7 +572,7 @@ __END__
 
 =head1 NAME
 
-Class::Autouse - Defer loading of one or more classes.
+Class::Autouse - Run-time class loading on first method call
 
 =head1 SYNOPSIS
 
