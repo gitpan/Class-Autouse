@@ -19,31 +19,28 @@ use vars qw{$devel $superloader};
 use vars qw{%chased %loaded %special %bad};
 use vars qw{*_original_can};
 BEGIN {
-	$VERSION = '1.01';
+	$VERSION = '1.02';
 	$DEBUG   = 0;
 
 	# Using Class::Autouse in a mod_perl situation can be dangerous, 
-	# as it can class badly with autoreloaders such as Apache::Reload.
+	# as it can clash badly with autoreloaders such as Apache::Reload.
 	# So ALWAYS run in devel mode under mod_perl. Since they should
 	# probably be loading modules at startup time ( in the parent 
 	# process ) anyway, this is a good thing.
 	$devel       = $ENV{MOD_PERL} ? 1 : 0;
 	$superloader = 0;
 
-	# Have we tried to autoload a method before.
+	# Anti-loop protection. "Have we tried to autoload a method before?"
 	# Contains the fully referenced sub name.
 	%chased = ();
 
-	# Is a class special, and we should try to do anything with it.
-	%special = map { $_ => 1 } qw{main UNIVERSAL CORE ARRAY HASH SCALAR};
-
-	# Define an errata list of classes where bad things happen when we
-	# autouse them, so they should specifically always be loaded normally.
-	%bad = map { $_ => 1 } qw{IO::File};
-
-	# Has a class been loaded. For convenience, prestock with 
-	# all the classes we ourselves use that are commonly inherited from.
-	%loaded = map { $_ => 1 } qw{UNIVERSAL Exporter Carp File::Spec};
+	# ERRATA
+	# Special classes are internal and should be left alone.
+	# Loaded modules are those we should assume to be loaded already.
+	# Bad classes are those that are irrepairably incompatible with us.
+	%special = map { $_ => 1 } qw{CORE main ARRAY HASH SCALAR REF UNIVERSAL};
+	%loaded  = map { $_ => 1 } qw{UNIVERSAL Exporter Carp File::Spec};
+	%bad     = map { $_ => 1 } qw{IO::File};
 }
 
 
@@ -163,7 +160,6 @@ sub load {
 		# and add the @ISA to the load stack.
 		push @search, $c unless $c eq 'UNIVERSAL';
         	unshift @stack, @{"${c}::ISA"};
-        	$loaded{$c} = 1;
 	}
 
 	# If called an an array context, return the ISA tree.
@@ -335,15 +331,14 @@ sub _load {
 	} elsif ( defined $INC{$file} ) {
 		# If the %INC lock is set to any other value, the file is 
 		# already loaded. We do not need to do anything.
-		return 1;
+		return $loaded{$class} = 1;
 		
 	} elsif ( ! _file_exists($file) ) {
 		# File doesn't exist. We might still be OK, if the class was
 		# defined in some other module that got loaded a different way.
-		return 1 if _namespace_occupied( $class );
-	
-		# Definately doesn't exist.
-		_cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
+		_namespace_occupied( $class )
+			? return $loaded{$class} = 1
+			: _cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
 	}
 
 	# Load the file
@@ -352,6 +347,7 @@ sub _load {
 	}
 	eval { require $file };
 	_cry( $@ ) if $@;
+	$loaded{$class} = 1;
 }
 
 # Find all the child classes for a parent class.
