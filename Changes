@@ -1,5 +1,8 @@
 Revision history for Perl extension Class::Autouse.
 
+1.03 Mon Dec  8 2003
+	- Adding another couple of minor error validating changes
+
 1.02 Wed Dec  3 2003
 	- Minor optimisation, and some pod bugs fixed.
 

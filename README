@@ -156,7 +156,11 @@ METHODS
     correctly.
 
 SUPPORT
-    Contact the author
+    Bugs should be reported via the CPAN bug tracker at
+
+      http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse
+
+    For other issues, contact the author
 
 AUTHORS
             Adam Kennedy ( maintainer )

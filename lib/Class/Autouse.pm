@@ -2,13 +2,18 @@ package Class::Autouse;
 
 # See POD at end of file for documentation
 
+### Memory Overhead: 196K
+
 require 5.005;
 use strict;
 no strict 'refs';
+use UNIVERSAL ();
 
 # Become an exporter so we don't get
 # complaints when we act as a pragma.
 use base 'Exporter';
+
+# There are some things we use
 use Carp       ();
 use File::Spec ();
 use List::Util ();
@@ -19,7 +24,7 @@ use vars qw{$devel $superloader};
 use vars qw{%chased %loaded %special %bad};
 use vars qw{*_original_can};
 BEGIN {
-	$VERSION = '1.02';
+	$VERSION = '1.03';
 	$DEBUG   = 0;
 
 	# Using Class::Autouse in a mod_perl situation can be dangerous, 
@@ -27,7 +32,7 @@ BEGIN {
 	# So ALWAYS run in devel mode under mod_perl. Since they should
 	# probably be loading modules at startup time ( in the parent 
 	# process ) anyway, this is a good thing.
-	$devel       = $ENV{MOD_PERL} ? 1 : 0;
+	$devel       = !! $ENV{MOD_PERL};
 	$superloader = 0;
 
 	# Anti-loop protection. "Have we tried to autoload a method before?"
@@ -158,7 +163,7 @@ sub load {
 
 		# Add the class to the search list,
 		# and add the @ISA to the load stack.
-		push @search, $c unless $c eq 'UNIVERSAL';
+		push @search, $c;
         	unshift @stack, @{"${c}::ISA"};
 	}
 
@@ -241,7 +246,7 @@ sub _autoload {
 	my ($class, $function) = $method =~ m/^(.*)::(.*)$/o;
 	_cry( "Undefined subroutine \&$method called" ) if $special{$class};
 
-	# Load the class and it's dependancies
+	# Load the class and it's dependancies, and get the search path
 	my @search = Class::Autouse->load($class);
 
 	# Find and go to the named method
@@ -251,11 +256,8 @@ sub _autoload {
 	# Check for package AUTOLOADs
 	foreach my $c ( @search ) {
         	if ( defined *{ "${c}::AUTOLOAD" }{CODE} ) {
-        		# Set the AUTOLOAD variable in the package
-        		# we are about to go to, so the AUTOLOAD
-        		# sub there will work properly
+			# Simulate a normal autoload call
         		${"${c}::AUTOLOAD"} = $method;
-
         		goto &{"${c}::AUTOLOAD"};
         	}
 	}
@@ -264,7 +266,7 @@ sub _autoload {
 	_cry( "Can't locate object method \"$function\" via package \"$class\"" );
 }
 
-# This just handles a call and does nothing
+# This just handles the call and does nothing
 sub _destroy { _debug(\@_) if $DEBUG }
 
 # This is the replacement for UNIVERSAL::can
@@ -274,10 +276,13 @@ sub _can {
 	# Shortcut for the most likely cases
 	goto &_original_can if $loaded{$class} or defined @{"${class}::ISA"};
 
+	# Does it look like a package?
+	return undef unless $class =~ qr/^[^\W\d]\w*(?:(?:'|::)[^\W\d]\w*)*$/;
+
 	# Do we try to load the class
 	my $load = 0;
 	my $file = File::Spec->catfile( split( /::/, $class) ) . '.pm';
-	if ( $INC{$file} eq 'Class::Autouse' ) {
+	if ( defined $INC{$file} and $INC{$file} eq 'Class::Autouse' ) {
 		# It's an autoused class
 		$load = 1;
 	} elsif ( ! $superloader ) {
@@ -321,18 +326,17 @@ sub _load {
 
 	# Run some checks
 	my $file = File::Spec->catfile( split( /::/, $class) ) . '.pm';
-	if ( defined $INC{$file} and $INC{$file} eq 'Class::Autouse' ) {
+	if ( defined $INC{$file} ) {
+		# If the %INC lock is set to any other value, the file is 
+		# already loaded. We do not need to do anything.
+		return $loaded{$class} = 1 if $INC{$file} ne 'Class::Autouse';
+
 		# Because we autoused it earlier, we know the file for this
 		# class MUST exist.
 		# Removing the AUTOLOAD hook and %INC lock is all we have to do
 		delete ${"${class}::"}{'AUTOLOAD'};
 		delete $INC{ $file };
-		
-	} elsif ( defined $INC{$file} ) {
-		# If the %INC lock is set to any other value, the file is 
-		# already loaded. We do not need to do anything.
-		return $loaded{$class} = 1;
-		
+
 	} elsif ( ! _file_exists($file) ) {
 		# File doesn't exist. We might still be OK, if the class was
 		# defined in some other module that got loaded a different way.
@@ -342,11 +346,8 @@ sub _load {
 	}
 
 	# Load the file
-	if ( $DEBUG ) {
-		print _call_depth(1) . "  Class::Autouse::load -> Loading in $file\n";
-	}
-	eval { require $file };
-	_cry( $@ ) if $@;
+	print _call_depth(1) . "  Class::Autouse::load -> Loading in $file\n" if $DEBUG;
+	eval { require $file }; _cry($@) if $@;
 	$loaded{$class} = 1;
 }
 
@@ -360,17 +361,15 @@ sub _child_classes {
 	my $base_file = File::Spec->catfile( split( /::/, $base_class) ) . '.pm';
 
 	# Find where it is in @INC
-	my $inc_path = List::Util::first { 
-		-f File::Spec->catfile( $_, $base_file ) 
+	my $inc_path = List::Util::first {
+		-f File::Spec->catfile( $_, $base_file )
 		} @INC or return;
 
 	# Does the file have a subdirectory
 	# i.e. Are there child classes
 	my $child_path = substr( $base_file, 0, length($base_file) - 3 );
 	my $child_path_full = File::Spec->catdir( $inc_path, $child_path );
-	unless ( -d $child_path_full and -r $child_path_full ) {
-		return 0;
-	}
+	return 0 unless -d $child_path_full and -r $child_path_full;
 
 	# Main scan loop
 	my ( $dir, @files );
@@ -406,7 +405,7 @@ sub _child_classes {
 	}
 
 	# Convert the file names into modules
-	return map { join '::', File::Spec->splitdir( $_ ) }
+	map { join '::', File::Spec->splitdir($_) }
 		map { substr( $_, 0, length($_) - 3 ) } @modules;
 }
 
@@ -706,7 +705,11 @@ a large class tree that might not always be loaded will load correctly.
 
 =head1 SUPPORT
 
-Contact the author
+Bugs should be reported via the CPAN bug tracker at
+
+  http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse
+
+For other issues, contact the author
 
 =head1 AUTHORS
 

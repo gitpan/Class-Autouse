@@ -14,7 +14,7 @@ use lib catdir( curdir(), 'modules' ),
         catdir( 't', 'modules' ),
         catdir( updir(), updir(), 'modules' );
 use UNIVERSAL 'isa';
-use Test::More tests => 12;
+use Test::More tests => 14;
 
 BEGIN { $| = 1 }
 
@@ -84,3 +84,10 @@ ok( F->foo eq 'Return value from E->foo', 'Class->SUPER::method works safely' );
 # In particular, this was causing problems with MakeMaker.
 @G::ISA = 'E';
 ok( G->can('foo'), "_can handles the empty class with \@ISA case correctly" );
+
+
+
+
+# Catch bad uses of _can early.
+is( Class::Autouse::_can(undef, 'foo'), undef, 'Giving bad stuff to _can returns expected' );
+is( Class::Autouse::_can( 'something/random/that/isnt/c/class', 'paths' ), undef, 'Giving bad stuff to _can returns OK' );
