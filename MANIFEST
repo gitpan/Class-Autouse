@@ -22,8 +22,13 @@ modules/C.pm
 modules/D.pm
 modules/E.pm
 modules/F.pm
+modules/T.pm
+modules/T/A.pm
+modules/T/B.pm
+modules/T/B/G.pm
 README
 t/00_compile.t
 t/01_main.t
 t/02_parent.t
 t/03_prefork.t
+t/04_recursive.t

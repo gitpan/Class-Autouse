@@ -1,5 +1,9 @@
 Revision history for Perl extension Class::Autouse.
 
+1.14 Wed Jan 19 2005
+	- Allowed a bug to slip in to autouse_recursive (resolved)
+	- Added regression test for the case
+
 1.13 Tue Jan 11 2005
 	- Updated copyright date
 	- Added no_index entry to makefile to prevent indexing A.pm etc

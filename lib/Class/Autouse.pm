@@ -23,7 +23,7 @@ use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD};    # Load environment
 use vars qw{$HOOKS %chased %loaded %special %bad}; # Working data
 use vars qw{*_UNIVERSAL_can};                      # Subroutine storage
 BEGIN {
-	$VERSION = '1.13';
+	$VERSION = '1.14';
 	$DEBUG   = 0;
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
@@ -228,7 +228,7 @@ sub autouse_recursive {
 	return 1 if $SUPERLOAD;
 
 	# Find all the child classes, and hand them to the autouse method
-	Class::Autouse->autouse( $_[1], _child_classes $_[1] );
+	Class::Autouse->autouse( $_[1], _child_classes($_[1]) );
 }
 
 # Load not only a class and all others below it
