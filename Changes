@@ -1,5 +1,10 @@
 Revision history for Perl extension Class::Autouse.
 
+0.6  Wed Apr 3 20:31:41 2002
+        - Fixed a serious bug that was missed.
+        - Added a load cache to cut back on stat calls
+        - Minor logic speed ups in recursive code        
+
 0.5  Fri Mar 15 20:53:34 2002
         - Better, nested debugging messages
         - Debug can be enabled in pragma

@@ -14,13 +14,14 @@ use UNIVERSAL;
 
 # Globals
 use vars qw{$VERSION $DEBUG};
-use vars qw{$devel $superloader %chased %special};
+use vars qw{$devel $superloader %chased %loaded %special};
 use vars qw{$SLASH};
 BEGIN {
-	$VERSION = 0.5;
+	$VERSION = 0.6;
 	$devel = 0;
 	$superloader = 0;
 	%chased = ();
+	%loaded = ();
 	$DEBUG = 0;
 	%special = (
 		main      => 1,
@@ -167,6 +168,7 @@ sub load {
 
 	# Mark that the class has been loaded
 	$INC{$file} = $filename;
+	$loaded{$class} = 1;
 	
 	return 1;
 }
@@ -184,6 +186,26 @@ sub class_exists {
 	return _file_exists( $file ) ? 1 : 0;
 }
 
+# A more general method to answer the question
+# "Can I call a method on this class and expect it to work"
+# Returns undef if the class does not exist
+# Returns 0 if the class is not loaded ( or autouse'd )
+# Returns 1 if the class can be used.
+sub can_call_methods {
+	print _debug(\@_,1) if $DEBUG;
+	
+	# Is it loaded already?
+	return 1 if _namespace_occupied( $_[1] );
+
+	# Does the file exist
+	my $file = _class_file( $_[1] ) or return undef;
+	$file = _file_exists( $file );
+	return undef unless $file;
+	
+	# Is the file in %INC
+	return exists $INC{$file} ? 1 : 0;
+}			
+
 # Recursive methods currently only work withing the scope of the single @INC
 # entry containing the "top" module, and will probably stay this way
 
@@ -192,20 +214,35 @@ sub autouse_recursive {
 	print _debug(\@_,1) if $DEBUG;
 
 	# Hand things over to the main recursive method as needed
-	if ( $devel ) {
-		return _recursive( $_[1], 'load' );
-	} else {
-		return 1 if $superloader;
-		return _recursive( $_[1], 'autouse' );
-	}
+	my $class = $_[1];
+	return Class::Autouse->load_recursive( $class ) if $devel;
+
+	# Don't need to do anything if the super loader is on
+	return 1 if $superloader;
+	
+	# Find all the child classes, and hand them to the
+	# autouse method
+	my $children = _child_classes( $class );
+	Class::Autouse->autouse( $class, ($children ? @$children : ()) );
+	return 1;	
 }
 
 # Load not only a class and all others below it
 sub load_recursive {
 	print _debug(\@_,1) if $DEBUG;
+
+	# Act on the parent class
+	Class::Autouse->load( $_[1] );
 	
-	# Hand over the the main recursion method.
-	return _recursive( $_[1], 'load' );
+	# Now get the list of child classes
+	my $children = _child_classes( $_[1] );
+	return 1 unless $children;
+	
+	# Act on each of the children
+	foreach ( @$children ) {
+		Class::Autouse->load($_);
+	}
+	return 1;
 }
 
 
@@ -228,7 +265,7 @@ sub _autoload {
 	_cry( "Undefined subroutine &$method called" ) if ++$chased{ $method } > 10;
 
 	# Check for special classes
-	my ($class, $function) = m/^(.*)::(.*)$/o;
+	my ($class, $function) = $method =~ m/^(.*)::(.*)$/o;
 	_cry( "Undefined subroutine \&$method called" ) if $special{$class};
 
 	# First, search tree, loading as we go
@@ -240,7 +277,7 @@ sub _autoload {
 		$searched{$c} = 1;
 
 		# Ensure class is loaded
-		Class::Autouse->load($c);
+		Class::Autouse->load($c) unless $loaded{$c};
 		
 		# Check for a matching function
 		goto &{"$c\::$function"} if defined *{"$c\::$function"}{CODE};
@@ -273,24 +310,6 @@ sub _destroy {
 	print _debug(\@_) if $DEBUG;
 	
 	# This just handles a call and does nothing
-}
-
-# Perform an action on a class recursively
-sub _recursive {
-	print _debug(\@_) if $DEBUG;
-		
-	# Act on the parent class
-	my ( $parent, $method ) = @_;
-	Class::Autouse->$method( $parent );
-	
-	# Now get the list of child classes
-	my $children = _child_classes( $parent );
-	return 1 unless $children;
-	
-	# Act on each of the children
-	foreach ( @$children ) {
-		Class::Autouse->$method( $_ );
-	}
 }
 
 # Find all the child classes for a parent class
