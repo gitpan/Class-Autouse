@@ -9,7 +9,7 @@ use Class::Autouse ();
 
 use vars qw{$VERSION};
 BEGIN {
-	$VERSION = '1.0';
+	$VERSION = '1.13';
 }
 
 # Maintain flags for "is the class in the process of loading"

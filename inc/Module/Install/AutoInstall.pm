@@ -1,7 +1,4 @@
-#line 1 "inc/Module/Install/AutoInstall.pm - /usr/lib/perl5/site_perl/5.8.0/Module/Install/AutoInstall.pm"
-# $File: //depot/cpan/Module-Install/lib/Module/Install/AutoInstall.pm $ $Author: autrijus $
-# $Revision: #13 $ $Change: 1846 $ $DateTime: 2003/12/31 22:57:12 $ vim: expandtab shiftwidth=4
-
+#line 1 "inc/Module/Install/AutoInstall.pm - /usr/local/share/perl/5.8.4/Module/Install/AutoInstall.pm"
 package Module::Install::AutoInstall;
 use Module::Install::Base; @ISA = qw(Module::Install::Base);
 

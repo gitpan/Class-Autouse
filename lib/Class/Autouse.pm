@@ -23,7 +23,7 @@ use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD};    # Load environment
 use vars qw{$HOOKS %chased %loaded %special %bad}; # Working data
 use vars qw{*_UNIVERSAL_can};                      # Subroutine storage
 BEGIN {
-	$VERSION = '1.12';
+	$VERSION = '1.13';
 	$DEBUG   = 0;
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
@@ -97,7 +97,7 @@ sub superloader {
 		# Because this will never go away, we increment $HOOKS such
 		# that it will never be decremented, and this the
 		# UNIVERSAL::can hijack will never be removed.
-		__UPDATE_CAN() unless $HOOKS++;
+		_UPDATE_CAN() unless $HOOKS++;
 	}
 
 	$SUPERLOAD = 1;
@@ -107,21 +107,22 @@ sub superloader {
 sub autouse {
 	# Operate as a function or a method
 	shift if $_[0] eq 'Class::Autouse';
+
+	# Ignore calls with no arguments
 	return 1 unless @_;
 
 	_debug(\@_) if $DEBUG;
 
-	my @classes = grep { $_ } @_;
-	foreach my $class ( @classes ) {
+	foreach my $class ( grep { $_ } @_ ) {
 		# Control flag handling
-		if ( $class =~ s/^:// ) {
-			if ( $class eq 'superloader' ) {
+		if ( substr($class, 0, 1) eq ':' ) {
+			if ( $class eq ':superloader' ) {
 				# Turn on the superloader
 				Class::Autouse->superloader;
-			} elsif ( $class eq 'devel' ) {
+			} elsif ( $class eq ':devel' ) {
 				# Turn on devel mode
 				Class::Autouse->devel(1);
-			} elsif ( $class eq 'debug' ) {
+			} elsif ( $class eq ':debug' ) {
 				# Turn on debugging
 				$DEBUG = 1;
 				print _call_depth(1) . "Class::Autouse::autoload -> Debugging Activated.\n";
@@ -152,7 +153,7 @@ sub autouse {
 		$INC{$file} = 'Class::Autouse';
 
 		# When we add the first hook, hijack UNIVERSAL::can
-		__UPDATE_CAN() unless $HOOKS++;
+		_UPDATE_CAN() unless $HOOKS++;
 	}
 
 	1;
@@ -177,7 +178,7 @@ sub load {
 
 	# Load the entire ISA tree
 	my @stack  = ( $class );
-	my %seen   = ( 'UNIVERSAL' => 1 );
+	my %seen   = ( UNIVERSAL => 1 );
 	my @search = ();
 	while ( my $c = shift @stack ) {
 		next if $seen{$c}++;
@@ -200,8 +201,6 @@ sub load {
 # OR is it loaded in our program already
 sub class_exists {
 	_debug(\@_, 1) if $DEBUG;
-
-	# Is the class loaded already, or can we find its file
 	_namespace_occupied($_[1]) or _file_exists($_[1]);
 }
 
@@ -212,9 +211,7 @@ sub class_exists {
 # Returns 1 if the class can be used.
 sub can_call_methods {
 	_debug(\@_, 1) if $DEBUG;
-
-	# Is it loaded already, or is the file in %INC
-	_namespace_occupied($_[1]) or exists $INC{ _class_file $_[1] };
+	_namespace_occupied $_[1] or exists $INC{_class_file $_[1]};
 }
 
 # Recursive methods currently only work withing the scope of the single @INC
@@ -225,14 +222,13 @@ sub autouse_recursive {
 	_debug(\@_, 1) if $DEBUG;
 
 	# Just load if in devel mode
-	my $class = $_[1];
-	return Class::Autouse->load_recursive( $class ) if $DEVEL;
+	return Class::Autouse->load_recursive($_[1]) if $DEVEL;
 
 	# Don't need to do anything if the super loader is on
 	return 1 if $SUPERLOAD;
 
 	# Find all the child classes, and hand them to the autouse method
-	Class::Autouse->autouse( $class, _child_classes($class) );
+	Class::Autouse->autouse( $_[1], _child_classes $_[1] );
 }
 
 # Load not only a class and all others below it
@@ -240,8 +236,7 @@ sub load_recursive {
 	_debug(\@_, 1) if $DEBUG;
 
 	# Load the parent class, and its children
-	my $class = $_[1];
-	foreach ( $class, _child_classes($class) ) {
+	foreach ( $_[1], _child_classes($_[1]) ) {
 		Class::Autouse->load($_);
 	}
 
@@ -279,7 +274,7 @@ sub _AUTOLOAD {
 
 	# Check for package AUTOLOADs
 	foreach my $c ( @search ) {
-        	if ( defined *{ "${c}::AUTOLOAD" }{CODE} ) {
+        	if ( defined *{"${c}::AUTOLOAD"}{CODE} ) {
 			# Simulate a normal autoload call
         		${"${c}::AUTOLOAD"} = $method;
         		goto &{"${c}::AUTOLOAD"};
@@ -301,7 +296,7 @@ sub _can {
 	goto &_UNIVERSAL_can if $loaded{$class} or defined @{"${class}::ISA"};
 
 	# Does it look like a package?
-	return undef unless $class =~ qr/^[^\W\d]\w*(?:(?:'|::)[^\W\d]\w*)*$/o;
+	$class =~ /^[^\W\d]\w*(?:(?:'|::)[^\W\d]\w*)*$/o or return undef;
 
 	# Do we try to load the class
 	my $load = 0;
@@ -312,7 +307,7 @@ sub _can {
 	} elsif ( ! $SUPERLOAD ) {
 		# Superloader isn't on, don't load
 		$load = 0;
-	} elsif ( _namespace_occupied($class) ) {
+	} elsif ( _namespace_occupied $class ) {
 		# Superloader is on, but there is something already in the class
 		# This can't be the autouse loader, because we would have caught
 		# that case already
@@ -341,7 +336,7 @@ sub _can {
 # Support Functions
 
 # Load a single class
-sub _load {
+sub _load ($) {
 	_debug(\@_) if $DEBUG;
 
 	# Don't attempt to load special classes
@@ -359,7 +354,7 @@ sub _load {
 		# class MUST exist.
 		# Removing the AUTOLOAD hook and %INC lock is all we have to do
 		delete ${"${class}::"}{'AUTOLOAD'};
-		delete $INC{ $file };
+		delete $INC{$file};
 
 	} elsif ( ! _file_exists($file) ) {
 		# File doesn't exist. We might still be OK, if the class was
@@ -374,34 +369,33 @@ sub _load {
 	eval { CORE::require $file }; _cry $@ if $@;
 
 	# Give back UNIVERSAL::can if there are no other hooks
-	__UPDATE_CAN() if ! --$HOOKS;
+	--$HOOKS or _UPDATE_CAN();
 
 	$loaded{$class} = 1;
 }
 
 # Find all the child classes for a parent class.
 # Returns in the list context.
-sub _child_classes {
+sub _child_classes ($) {
 	_debug(\@_) if $DEBUG;
 
 	# Find where it is in @INC
 	my $base_file = _class_file shift;
-	my $inc_path = List::Util::first {
-		-f File::Spec->catfile( $_, $base_file )
+	my $inc_path  = List::Util::first {
+		-f File::Spec->catfile($_, $base_file)
 		} @INC or return;
 
 	# Does the file have a subdirectory
 	# i.e. Are there child classes
-	my $child_path = substr( $base_file, 0, length($base_file) - 3 );
+	my $child_path      = substr( $base_file, 0, length($base_file) - 3 );
 	my $child_path_full = File::Spec->catdir( $inc_path, $child_path );
-	return 0 unless -d $child_path_full and -r $child_path_full;
+	return 0 unless -d $child_path_full and -r _;
 
 	# Main scan loop
-	my ( $dir, @files );
-	my @modules = ();
+	my ($dir, @files, @modules) = ();
 	my @queue = ( $child_path );
 	while ( $dir = pop @queue ) {
-		my $full_dir = File::Spec->catdir( $inc_path, $dir );
+		my $full_dir = File::Spec->catdir($inc_path, $dir);
 
 		# Read in the raw file list
 		# Skip directories we can't open
@@ -410,20 +404,20 @@ sub _child_classes {
 		closedir FILELIST;
 
 		# Iterate over them
-		@files = map { File::Spec->catfile( $dir, $_ ) } # Full relative path
+		@files = map { File::Spec->catfile($dir, $_) } # Full relative path
 			grep { ! /^\./ } @files;                 # Ignore hidden files
 		foreach my $file ( @files ) {
-			my $full_file = File::Spec->catfile( $inc_path, $file );
+			my $full_file = File::Spec->catfile($inc_path, $file);
 
 			# Add to the queue if its a directory we can descend
-			if ( -d $full_file and -r $full_file ) {
+			if ( -d $full_file and -r _ ) {
 				push @queue, $file;
 				next;
 			}
 
 			# We only want .pm files we can read
 			next unless substr( $file, length($file) - 3 ) eq '.pm';
-			next unless -f $full_file;
+			next unless -f _;
 
 			push @modules, $file;
 		}
@@ -431,7 +425,7 @@ sub _child_classes {
 
 	# Convert the file names into modules
 	map { join '::', File::Spec->splitdir($_) }
-		map { substr( $_, 0, length($_) - 3 ) } @modules;
+		map { substr($_, 0, length($_) - 3) } @modules;
 }
 
 
@@ -443,7 +437,7 @@ sub _child_classes {
 
 # Does a class or file exists somewhere in our include path. For
 # convenience, returns the unresolved file name ( even if passed a class )
-sub _file_exists {
+sub _file_exists ($) {
 	_debug(\@_) if $DEBUG;
 
 	# What are we looking for?
@@ -455,7 +449,7 @@ sub _file_exists {
 
 	# Scan @INC for the file
 	foreach ( @INC ) {
-		return $file if -f File::Spec->catfile( $_, $file );
+		return $file if -f File::Spec->catfile($_, $file);
 	}
 
 	undef;
@@ -491,7 +485,7 @@ sub _call_depth {
 	# Search up the caller stack to find the first call that isn't us.
 	my $level = 0;
 	while( $level++ < 1000 ) {
-		my @call = caller( $level );
+		my @call = caller($level);
 		my ($subclass) = $call[3] =~ m/^(.*)::/so;
 		unless ( defined $subclass and $subclass eq 'Class::Autouse' ) {
 			# Subtract 1 for this sub's call
@@ -522,10 +516,10 @@ sub _debug {
 	if ( ref $args ) {
 		my @mapped = map { "'$_'" } @$args;
 		shift @mapped if $method;
-		$msg .= @mapped ? "( " . ( join ', ', @mapped ) . " )" : '()';
+		$msg .= @mapped ? '( ' . ( join ', ', @mapped ) . ' )' : '()';
 	}
 
-	print $msg . $message . "\n";
+	print "$msg$message\n";
 }
 
 
@@ -535,16 +529,16 @@ sub _debug {
 #####################################################################
 # Final Initialisation
 
-# The __UPDATE_CAN function is intended to turn our hijacking of UNIVERSAL::can
+# The _UPDATE_CAN function is intended to turn our hijacking of UNIVERSAL::can
 # on or off, depending on whether we have any live hooks. The idea being, if we
-# don't have any, why are we intercepting UNIVERSAL::can calls?
+# don't have any live hooks, why bother intercepting UNIVERSAL::can calls?
 BEGIN { eval( $] >= 5.006 ? <<'END_NEW_PERL' : <<'END_OLD_PERL'); die $@ if $@ }
-sub __UPDATE_CAN {
+sub _UPDATE_CAN () {
 	no warnings;
 	*UNIVERSAL::can = $HOOKS ? *_can{CODE} : *_UNIVERSAL_can{CODE};
 }
 END_NEW_PERL
-sub __UPDATE_CAN {
+sub _UPDATE_CAN () {
 	local $^W = 0;
 	*UNIVERSAL::can = $HOOKS ? *_can{CODE} : *_UNIVERSAL_can{CODE};
 }
@@ -747,7 +741,7 @@ Bugs should be reported via the CPAN bug tracker at
 
 L<http://rt.cpan.org/NoAuth/ReportBug.html?Queue=Class%3A%3AAutouse>
 
-For other issues, contact the author
+For other issues, or commercial enhancement or support, contact the author.
 
 =head1 AUTHORS
 

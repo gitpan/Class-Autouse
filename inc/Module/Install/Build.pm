@@ -1,7 +1,4 @@
-#line 1 "inc/Module/Install/Build.pm - /usr/lib/perl5/site_perl/5.8.0/Module/Install/Build.pm"
-# $File: //depot/cpan/Module-Install/lib/Module/Install/Build.pm $ $Author: ingy $
-# $Revision: #23 $ $Change: 1255 $ $DateTime: 2003/03/05 13:23:32 $ vim: expandtab shiftwidth=4
-
+#line 1 "inc/Module/Install/Build.pm - /usr/local/share/perl/5.8.4/Module/Install/Build.pm"
 package Module::Install::Build;
 $VERSION = '0.01';
 use strict;
@@ -63,4 +60,4 @@ sub ACTION_dist {
 
 __END__
 
-#line 178
+#line 175

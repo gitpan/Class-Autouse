@@ -22,7 +22,6 @@ modules/C.pm
 modules/D.pm
 modules/E.pm
 modules/F.pm
-prefork.pm
 README
 t/00_compile.t
 t/01_main.t
