@@ -1,5 +1,8 @@
 Revision history for Perl extension Class::Autouse.
 
+1.12 Mon Nov 15 2004
+	- A small change to compile properly when prefork not installed
+
 1.11 Sun Nov 14 2004
 	- Made dependency on prefork optional
 	- Removed useless $UNIX variable

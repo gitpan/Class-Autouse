@@ -23,7 +23,7 @@ use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD};    # Load environment
 use vars qw{$HOOKS %chased %loaded %special %bad}; # Working data
 use vars qw{*_UNIVERSAL_can};                      # Subroutine storage
 BEGIN {
-	$VERSION = '1.11';
+	$VERSION = '1.12';
 	$DEBUG   = 0;
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
@@ -560,7 +560,8 @@ BEGIN {
 	} else {
 		# Go into devel mode when prefork is enabled
 		$loaded{prefork} = 1;
-		prefork::notify( sub { Class::Autouse->devel(1) } );
+		eval "prefork::notify( sub { Class::Autouse->devel(1) } )";
+		die $@ if $@;
 	}
 }
 
