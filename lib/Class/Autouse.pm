@@ -19,7 +19,7 @@ use vars qw{$devel $superloader};
 use vars qw{%chased %loaded %special %bad};
 use vars qw{*_original_can};
 BEGIN {
-	$VERSION = '1.0';
+	$VERSION = '1.01';
 	$DEBUG   = 0;
 
 	# Using Class::Autouse in a mod_perl situation can be dangerous, 
@@ -275,17 +275,37 @@ sub _destroy { _debug(\@_) if $DEBUG }
 sub _can {
 	my $class = ref $_[0] || $_[0] || return undef;
 
-	# If it doesn't appear to be loaded, have a go at loading it
-	unless ( $loaded{$class} or _namespace_occupied($class) ) {
-		# Load the class and all it's dependencies.
-		# UNIVERSAL::can never dies, so we shouldn't either.
-		# Ignore, errors. If something goes wrong, 
-		# let the real UNIVERSAL::can have a short at it anyway.
-		eval { Class::Autouse->load($class) };
+	# Shortcut for the most likely cases
+	goto &_original_can if $loaded{$class} or defined @{"${class}::ISA"};
+
+	# Do we try to load the class
+	my $load = 0;
+	my $file = File::Spec->catfile( split( /::/, $class) ) . '.pm';
+	if ( $INC{$file} eq 'Class::Autouse' ) {
+		# It's an autoused class
+		$load = 1;
+	} elsif ( ! $superloader ) {
+		# Superloader isn't on, don't load
+		$load = 0;
+	} elsif ( _namespace_occupied($class) ) {
+		# Superloader is on, but there is something already in the class
+		# This can't be the autouse loader, because we would have caught
+		# that case already
+		$load = 0;
+	} else {
+		# The rules of the superloader say we assume loaded unless we can
+		# tell otherwise. Thus, we have to have a go at loading.
+		$load = 1;
 	}
 
+	# If needed, load the class and all it's dependencies.
+	# UNIVERSAL::can never dies, so we shouldn't either.
+	# Ignore, errors. If something goes wrong,
+	# let the real UNIVERSAL::can have a short at it anyway.
+	eval { Class::Autouse->load($class) } if $load;
+
 	# Hand off to the real UNIVERSAL::can
-	goto &_original_can;	
+	goto &_original_can;
 }
 
 

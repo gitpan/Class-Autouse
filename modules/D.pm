@@ -3,5 +3,6 @@ package D;
 use Class::Autouse 'C';
 use base 'C';
 
-1;
+sub method2 { 1 }
 
+1;
