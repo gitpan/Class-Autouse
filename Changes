@@ -1,5 +1,11 @@
 Revision history for Perl extension Class::Autouse.
 
+0.5  Fri Mar 15 20:53:34 2002
+        - Better, nested debugging messages
+        - Debug can be enabled in pragma
+        - One major bug fix
+        - Various minor speed improvements
+
 0.4  Wed Nov 7 14:03:48 2001
         - Added autouse_recursive and load_recursive
         - Fixed major bug in class_exists

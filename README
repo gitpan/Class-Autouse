@@ -9,24 +9,25 @@ SYNOPSIS
 
       # Use as a pragma
       use Class::Autouse qw{CGI};
-      
-      # Use developer mode
+  
+      # Turn on debugging
+      use Class::Autouse qw{:debug};
+  
+      # Turn on developer mode
       use Class::Autouse qw{:devel};
-      
+  
       # Turn on the Super Loader
       use Class::Autouse qw{:superloader};
 
 DESCRIPTION
-    Class::Autouse allows you to specify a class the will only load
-    when a method of that class is called. For large classes that
-    might not be used during the running of a program, such as
-    Date::Manip, this can save you large amounts of memory, and
-    decrease the script load time.
+    Class::Autouse allows you to specify a class the will only load when a
+    method of that class is called. For large classes that might not be used
+    during the running of a program, such as Date::Manip, this can save you
+    large amounts of memory, and decrease the script load time.
 
   Use as a pragma
-
-    Class::Autouse can be used as a pragma, specifying a list of
-    classes to load as the arguments. For example
+    Class::Autouse can be used as a pragma, specifying a list of classes to
+    load as the arguments. For example
 
        use Class::Autouse qw{CGI Data::Manip This::That};
 
@@ -37,107 +38,114 @@ DESCRIPTION
        Class::Autouse->autouse( 'Data::Manip' );
        Class::Autouse->autouse( 'This::That' );
 
-  Developer Mode
+  The Internal Debugger
+    Given the ":debug" pragma argument, Class::Autouse will dump detailed
+    internal call information. This can be usefull when an error has
+    occurred that may be a little difficult to debug, and some more
+    inforamtion about when the problem has actually occurred is required.
+    Debug messages are written to STDOUT, and will look something like
 
-    Class::Autouse features a developer mode. In developer mode,
-    classes are loaded immediately, just like they would be with a
-    normal 'use' statement. This allows error checking to be done
-    while developing, at the expense of a larger memory overhead.
-    Developer mode is turned on either with the `devel' method, or
-    using :devel in any of the pragma arguments. For example, this
-    would load CGI.pm immediately.
+     Class::Autouse::autouse_recursive( 'AppCore' )
+      Class::Autouse::_recursive( 'AppCore', 'load' )
+       Class::Autouse::load( 'AppCore' )
+        Class::Autouse::_class_file( 'AppCore' )
+       Class::Autouse::_child_classes( 'AppCore' )
+        Class::Autouse::_class_file( 'AppCore' )
+       Class::Autouse::load( 'AppCore::Export' )
+        Class::Autouse::_class_file( 'AppCore::Export' )
+        Class::Autouse::_file_exists( 'AppCore/Export.pm' )
+        Class::Autouse::load -> Loading in AppCore/Export.pm
+       Class::Autouse::load( 'AppCore::Cache' )
+        Class::Autouse::_class_file( 'AppCore::Cache' )
+        etc...
+   
+  Developer Mode
+    Class::Autouse features a developer mode. In developer mode, classes are
+    loaded immediately, just like they would be with a normal 'use'
+    statement (although the import sub isn't called). This allows error
+    checking to be done while developing, at the expense of a larger memory
+    overhead. Developer mode is turned on either with the "devel" method, or
+    using :devel in any of the pragma arguments. For example, this would
+    load CGI.pm immediately
 
         use Class::Autouse qw{:devel CGI};
 
-    While developer mode is equivalent to just using a normal use
-    command, for a large number of modules it lets you use
-    autoloading notation, and just comment or uncomment a single
-    line to turn developer mode on or off
+    While developer mode is roughly equivalent to just using a normal use
+    command, for a large number of modules it lets you use autoloading
+    notation, and just comment or uncomment a single line to turn developer
+    mode on or off. You can leave it on during development, and turn it off
+    for speed reasons when deploying.
 
   Super Loader
-
-    Turning on the Class::Autouse super loader allows you to
-    automatically load ANY class without specifying it first. Thus,
-    the following will work and is completely legal.
+    Turning on the Class::Autouse super loader allows you to automatically
+    load ANY class without specifying it first. Thus, the following will
+    work and is completely legal.
 
         use Class::Autouse qw{:superloader};
 
         print CGI->header;
 
     The super loader can be turned on with either the
-    Class::Autouse->superloader method, or the :superloader pragma
-    argument.
+    Class::Autouse->superloader method, or the :superloader pragma argument.
 
   Recursion
-
     As an alternative to the super loader, the autouse_recursive and
-    load_recursive methods can be used to autouse or load an entire
-    tree of classes. For example, the following would give you
-    access to all the URI related classes installed on the machine.
+    load_recursive methods can be used to autouse or load an entire tree of
+    classes. For example, the following would give you access to all the URI
+    related classes installed on the machine.
 
         Class::Autouse->autouse_recursive( 'URI' );
 
-    Please note that the loadings will only occur down a single
-    branch of the include path, whichever the top class is located
-    in.
+    Please note that the loadings will only occur down a single branch of
+    the include path, whichever the top class is located in.
 
   Class, not Module
-
-    The terminology "Class loading" instead of "Module loading" is
-    used intentionally. Modules will only be loaded if they are
-    acting as a class. That is, they will only be loaded during a
-    Class->method call. If you try do use a subroutine directly, say
-    with `Class::method()', the class will not be loaded. This
-    limitation is made to allow more powerfull features in other
-    areas, because the module can focus on just loading the modules,
-    and not have to deal with importing.
+    The terminology "Class loading" instead of "Module loading" is used
+    intentionally. Modules will only be loaded if they are acting as a
+    class. That is, they will only be loaded during a Class->method call. If
+    you try do use a subroutine directly, say with "Class::method()", the
+    class will not be loaded. This limitation is made to allow more
+    powerfull features in other areas, because the module can focus on just
+    loading the modules, and not have to deal with importing.
 
 METHODS
   autouse( $class )
-
     The autouse method sets the class to be loaded as required.
 
   load( $class )
-
     The load method loads one or more classes into memory. This is
-    functionally equivalent to using require to load the class list
-    in, except that load will detect and remove the autoloading hook
-    from a previously autoused class, whereas as use effectively
-    ignore the class, and not load it.
+    functionally equivalent to using require to load the class list in,
+    except that load will detect and remove the autoloading hook from a
+    previously autoused class, whereas as use effectively ignore the class,
+    and not load it.
 
   devel
-
     The devel method sets development mode on (argument of 1) or off
     (argument of 0)
 
   superloader
-
-    The superloader method turns on the super loader. Please note
-    that once you have turned the superloader on, it cannot be
-    turned off. This is due to code that might be relying on it
-    being there not being able to autoload it's classes when another
-    piece of code decides they don't want it any more, and turns the
-    superloader off.
+    The superloader method turns on the super loader. Please note that once
+    you have turned the superloader on, it cannot be turned off. This is due
+    to code that might be relying on it being there not being able to
+    autoload it's classes when another piece of code decides they don't want
+    it any more, and turns the superloader off.
 
   class_exists
+    Handy method when doing the sort of jobs that Class::Autouse does. Given
+    a class name, it will return 1 if the class can be loaded ( i.e. in @INC
+    ), 0 if the class can't be loaded, and undef if the class name is
+    invalid.
 
-    Handy method when doing the sort of jobs that Class::Autouse
-    does. Given a class name, it will return 1 if the class can be
-    loaded ( i.e. in @INC ), 0 if the class can't be loaded, and
-    undef if the class name is invalid.
-
-    Note that this does not actually load the class, just tests to
-    see if it can be loaded. Loading can still fail.
+    Note that this does not actually load the class, just tests to see if it
+    can be loaded. Loading can still fail.
 
   autouse_recursive
-
-    The same as the `autouse' method, but autouses recursively
+    The same as the "autouse" method, but autouses recursively
 
   load_recursive
-
-    The same as the `load' method, but loads recursively. Great for
-    checking that a large class tree that might not always be loaded
-    will load correctly.
+    The same as the "load" method, but loads recursively. Great for checking
+    that a large class tree that might not always be loaded will load
+    correctly.
 
 AUTHORS
      Adam Kennedy, cpan@ali.as ( maintainer )          
