@@ -1,5 +1,10 @@
 Revision history for Perl extension Class::Autouse.
 
+0.2  Wed Aug 29 22:14:41 2001
+	- Code cleaned up and much more solid
+	- Added developer mode
+	- Added superloader
+	- Behaves with Carp properly
+
 0.1  Wed Jan 17 11:46:41 2001
 	- original version
-

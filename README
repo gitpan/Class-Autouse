@@ -1,25 +1,115 @@
 NAME
-       Class::Autouse - Defer loading ( 'use'ing ) of a class
-       until run time
+    Class::Autouse - Defer loading of a class or arbitrary classes
+    until one of it's methods is invoked.
 
 SYNOPSIS
-         use Class::Autouse;
+      # Load a class on demand
+      use Class::Autouse;
+      Class::Autouse->autouse( 'CGI' );
+      print CGI->header();
 
-         Class::Autouse->autouse( 'CGI' );
-
-         print CGI->header();
-
+      # Use as a pragma
+      use Class::Autouse qw{CGI};
+      
+      # Turn on developer mode
+      use Class::Autouse qw{:devel};
+      
+      # Turn on the super loader
+      use Class::Autouse qw{:superloader};
 
 DESCRIPTION
-       Class::Autouse allows you to specify a class the will only
-       load when a method of the class is called. For large
-       classes that might not be used during the running of a
-       program, such as Date::Manip, this can save you large
-       amounts of memory, and decrease the script load time.
+    Class::Autouse allows you to specify a class the will only load
+    when a method of the class is called. For large classes that
+    might not be used during the running of a program, such as
+    Date::Manip, this can save you large amounts of memory, and
+    decrease the script load time.
 
-AUTHOR
-       Adam Kennedy, cpan@ali.as
+  Use as a pragma
+
+    Class::Autouse can be used as a pragma, specifying a list of
+    classes to load as the arguments. For example
+
+       use Class::Autouse qw{CGI Data::Manip This::That};
+
+    is equivalent to
+
+       use Class::Autouse;
+       Class::Autouse->autouse( 'CGI' );
+       Class::Autouse->autouse( 'Data::Manip' );
+       Class::Autouse->autouse( 'This::That' );
+
+  Developer Mode
+
+    Class::Autouse features a developer mode. In developer mode,
+    classes are loaded immediately, just like they would be with a
+    normal 'use' statement. This allows error checking to be done
+    while developing, at the expense of a larger memory overhead.
+    Developer mode is turned on either with the `devel' method, or
+    using :devel in any of the pragma arguments. For example, this
+    would load CGI.pm immediately
+
+        use Class::Autouse qw{:devel CGI};
+
+    While developer mode is equivalent to just using a normal use
+    command, for a large number of modules it lets you use
+    autoloading notation, and just comment or uncomment a single
+    line to turn developer mode on or off
+
+  Super Loader
+
+    Turning on the Class::Autouse super loader allows you to
+    automatically load ANY class without specifying it first. Thus,
+    the following will work and is completely legal.
+
+        use Class::Autouse qw{:superloader};
+
+        print CGI->header;
+
+    The super loader can be turned on with either the
+    Class::Autouse->superloader method, or the :superloader pragma
+    argument
+
+  Class, not Module
+
+    The terminology "Class loading" instead of "Module loading" is
+    used intentionally. Modules will only be loaded if they are
+    acting as a class. That is, they will only be loaded during a
+    Class->method call. If you try do use a subroutine directory,
+    say with `Class::method()', the class will not be loaded. This
+    limitation is made to allow more powerfull features in other
+    areas, because the module can focus on just loading the modules,
+    and not have to deal with importing.
+
+METHODS
+  autouse( $class )
+
+    The autouse method sets the class to be loaded as required.
+
+  load( $class )
+
+    The load method loads one or more classes into memory. This is
+    functionally equivalent to using require to load the class list
+    in, except that load will detect and remove the autoloading hook
+    from a previously autoused class, whereas as use effectively
+    ignore the class, and not load it
+
+  devel
+
+    The devel method sets development mode on (argument of 1) or off
+    (argument of 0)
+
+  superloader
+
+    The superloader method turns on the super loader. Please note
+    that once you have turned the superloader on, it cannot be
+    turned off. This is due to code that might be relying on it
+    being there not being able to load it's classes when another
+    piece of code decides they don't want it any more.
+
+AUTHORS
+     Adam Kennedy, cpan@ali.as
+     Rob Napier,   rnapier@employees.org
 
 SEE ALSO
-       autoload
+    autoload, autoclass
 
