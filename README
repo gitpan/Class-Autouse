@@ -1,0 +1,25 @@
+NAME
+       Class::Autouse - Defer loading ( 'use'ing ) of a class
+       until run time
+
+SYNOPSIS
+         use Class::Autouse;
+
+         Class::Autouse->autouse( 'CGI' );
+
+         print CGI->header();
+
+
+DESCRIPTION
+       Class::Autouse allows you to specify a class the will only
+       load when a method of the class is called. For large
+       classes that might not be used during the running of a
+       program, such as Date::Manip, this can save you large
+       amounts of memory, and decrease the script load time.
+
+AUTHOR
+       Adam Kennedy, cpan@ali.as
+
+SEE ALSO
+       autoload
+
