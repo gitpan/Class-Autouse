@@ -1,5 +1,8 @@
 Revision history for Perl extension Class::Autouse.
 
+1.16 Tue Feb 15 2005
+	- Removing braindead pass-through Build.PL file
+
 1.15 Wed Feb  9 2005
 	- Reorganisation of method order over the last half a dozen
 	  versions allowed some invalid uses of indirect object syntax

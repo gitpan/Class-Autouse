@@ -23,7 +23,7 @@ use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD};    # Load environment
 use vars qw{$HOOKS %chased %loaded %special %bad}; # Working data
 use vars qw{*_UNIVERSAL_can};                      # Subroutine storage
 BEGIN {
-	$VERSION = '1.15';
+	$VERSION = '1.16';
 	$DEBUG   = 0;
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
