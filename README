@@ -1,9 +1,8 @@
 NAME
-    Class::Autouse - Defer loading of a class or arbitrary classes
-    until one of it's methods is invoked.
+    Class::Autouse - Defer loading of one or more classes.
 
 SYNOPSIS
-      # Load a class on demand
+      # Load a class on method call
       use Class::Autouse;
       Class::Autouse->autouse( 'CGI' );
       print CGI->header();
@@ -11,15 +10,15 @@ SYNOPSIS
       # Use as a pragma
       use Class::Autouse qw{CGI};
       
-      # Turn on developer mode
+      # Use developer mode
       use Class::Autouse qw{:devel};
       
-      # Turn on the super loader
+      # Turn on the Super Loader
       use Class::Autouse qw{:superloader};
 
 DESCRIPTION
     Class::Autouse allows you to specify a class the will only load
-    when a method of the class is called. For large classes that
+    when a method of that class is called. For large classes that
     might not be used during the running of a program, such as
     Date::Manip, this can save you large amounts of memory, and
     decrease the script load time.
@@ -46,7 +45,7 @@ DESCRIPTION
     while developing, at the expense of a larger memory overhead.
     Developer mode is turned on either with the `devel' method, or
     using :devel in any of the pragma arguments. For example, this
-    would load CGI.pm immediately
+    would load CGI.pm immediately.
 
         use Class::Autouse qw{:devel CGI};
 
@@ -67,15 +66,15 @@ DESCRIPTION
 
     The super loader can be turned on with either the
     Class::Autouse->superloader method, or the :superloader pragma
-    argument
+    argument.
 
   Class, not Module
 
     The terminology "Class loading" instead of "Module loading" is
     used intentionally. Modules will only be loaded if they are
     acting as a class. That is, they will only be loaded during a
-    Class->method call. If you try do use a subroutine directory,
-    say with `Class::method()', the class will not be loaded. This
+    Class->method call. If you try do use a subroutine directly, say
+    with `Class::method()', the class will not be loaded. This
     limitation is made to allow more powerfull features in other
     areas, because the module can focus on just loading the modules,
     and not have to deal with importing.
@@ -91,7 +90,7 @@ METHODS
     functionally equivalent to using require to load the class list
     in, except that load will detect and remove the autoloading hook
     from a previously autoused class, whereas as use effectively
-    ignore the class, and not load it
+    ignore the class, and not load it.
 
   devel
 
@@ -103,8 +102,19 @@ METHODS
     The superloader method turns on the super loader. Please note
     that once you have turned the superloader on, it cannot be
     turned off. This is due to code that might be relying on it
-    being there not being able to load it's classes when another
-    piece of code decides they don't want it any more.
+    being there not being able to autoload it's classes when another
+    piece of code decides they don't want it any more, and turns the
+    superloader off.
+
+  class_exists
+
+    Handy method when doing to sort of jobs that Class::Autouse
+    does. Given a class name, it will return 1 if the class can be
+    loaded ( i.e. in @INC ), 0 if the class can't be loaded, and
+    undef if the class name is invalid.
+
+    Note that this does not actually load the class, just tests to
+    see if it can be loaded.
 
 AUTHORS
      Adam Kennedy, cpan@ali.as

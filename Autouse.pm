@@ -7,34 +7,40 @@ no strict 'refs';
 # complaints when we act as a pragma
 use base 'Exporter';
 use Carp 'croak';
+use UNIVERSAL;
 
 # Globals
 use vars qw{$VERSION $DEBUG};
-use vars qw{$this_package $devel $superloader %chased};
+use vars qw{$devel $superloader %chased %special};
 BEGIN {
-	$VERSION = 0.2;
-	$this_package = 'Class::Autouse';
+	$VERSION = 0.3;
 	$devel = 0;
 	$superloader = 0;
 	%chased = ();
 	$DEBUG = 0;
+	%special = (
+		main      => 1,
+		UNIVERSAL => 1,
+		CORE      => 1,
+		);
+		
 }
 
 # Developer mode flag
 sub devel {
-	print "$this_package\::devel\n" if $DEBUG;
+	print "Class::Autouse::devel\n" if $DEBUG;
 	
-	$devel = $_[ 0 ] ? 1 : 0; 
+	$devel = $_[ 1 ] ? 1 : 0; 
 	return $devel;
 }
 
 # The main autouse sub
 sub autouse(@) {
-	print "$this_package\::autouse\n" if $DEBUG;
+	print "Class::Autouse::autouse\n" if $DEBUG;
 	
 	# Remove any reference to ourselves, to allow us to
 	# operate as a function, or a method
-	shift if $_[ 0 ] eq $this_package;
+	shift if $_[ 0 ] eq 'Class::Autouse';
 	
 	# Ignore and return if nothing passed
 	return 1 unless @_;
@@ -43,14 +49,16 @@ sub autouse(@) {
 	foreach my $class ( @classes ) {
 		# Control flag handling
 		if ( $class eq ':superloader' ) {
-			&superloader; next;
+			Class::Autouse->superloader();
+			next;
 		} elsif ( $class eq ':devel' ) {
-			&devel; next;
+			Class::Autouse->devel( 1 ); 
+			next;
 		}
 		
 		# Load load if in devel mode
 		if ( $devel ) {
-			load( $class ); next;
+			Class::Autouse->load( $class ); next;
 		}	
 		
 		# Get the file name
@@ -62,16 +70,15 @@ sub autouse(@) {
 		
 		# Make sure we will be able to 
 		# load the module when we need to
-		unless ( _class_exists( $file ) ) {
-			# Note: Same error as Perl itself
+		unless ( _class_file_exists( $file ) ) {
 			_cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
 		}
 		
 		# Define the AUTOLOAD sub
-		*{"${class}::AUTOLOAD"} = sub { goto &{ _chase( ${"${this_package}::AUTOLOAD"} ) } };
+		*{"${class}::AUTOLOAD"} = \&_autoload;
 		
 		# Put an %INC lock on the module to stop it being use'd
-		$INC{$file} = $this_package;
+		$INC{$file} = 'Class::Autouse';
 	}
 }
 
@@ -86,25 +93,37 @@ BEGIN {
 # loader. This is evil, but should work nicely and produce a 
 # nice level of magic :)
 sub superloader {
-	print "$this_package\::superloader\n" if $DEBUG;
+	print "Class::Autouse::superloader\n" if $DEBUG;
 	
 	return 1 if $superloader;
 	
 	# Overwrite UNIVERSAL::AUTOLOAD
-	*UNIVERSAL::AUTOLOAD = sub { goto &{ _chase( ${"${this_package}::AUTOLOAD"} ) } };
+	*UNIVERSAL::AUTOLOAD = \&_autoload;
 	
 	# Attach a dummy sub to the DESTROY method of UNIVERSAL,
 	# so that destroy calls don't make it to UNIVERSAL::AUTOLOAD
 	# Now I THINK that this will be good enough
 	# I'm assuming that nobody would be STUPID enough 
 	# to handle a DESTROY call inside an AUTOLOAD... right...?
-	# The other solution would be to handle it after the _chase call
-	# but this is much more elegant
-	*UNIVERSAL::DESTROY = sub {};
+	# The other solution would be to handle it after the _autoload call
+	# but this is a little
+	*UNIVERSAL::DESTROY = \&_destroy;
 	
 	$superloader = 1;
 }
 
+sub class_exists {
+	my $class = shift;
+	my $name = shift;
+	
+	# Convert to a file name
+	my $file = _class2file( $name );
+	return undef unless $file;
+	
+	# Does the file exist
+	return _class_file_exists( $file );
+}
+		
 
 
 
@@ -115,9 +134,9 @@ sub superloader {
 # Load can handle normal loading, loading from hooks,
 # and skipping loading for things already loaded
 sub load {
-	print "$this_package\::load( '$_[0]' )\n" if $DEBUG;
+	print "Class::Autouse::load( '$_[1]' )\n" if $DEBUG;
 
-	my $class = shift;
+	my $class = $_[1];
 	_cry( "Did not specify a class to load" ) unless $class;
 
 	# Is it a special module
@@ -127,7 +146,7 @@ sub load {
 	my $file = _class2file( $class );
 	_cry( "'$class' is not a module name" ) unless $file;
 	
-	if ( $INC{ $file } eq $this_package ) {	
+	if ( $INC{ $file } eq 'Class::Autouse' ) {	
 		# One of ours. Remove the loader hook and %INC lock
 		delete ${"${class}::"}{'AUTOLOAD'};
 		delete $INC{ $file };
@@ -137,7 +156,7 @@ sub load {
 		return 1;
 	}
 	
-	print "$this_package\::load -> require $file\n" if $DEBUG;
+	print "Class::Autouse::load -> require $file\n" if $DEBUG;
 	
 	eval { require ${file} };
 	if ( $@ ) {
@@ -149,18 +168,16 @@ sub load {
 	}
 }
 
-# Given a method name, do everything nescesary to 
-# call the appropriate method for it, following
-# @ISA, and loading modules as required
-sub _chase {
-	print "$this_package\::_chase( '$_[0]' )\n" if $DEBUG;
+# Get's linked via the symbol table to any AUTOLOADs are required
+sub _autoload {
+	print "Class::Autouse::_autoload(), AUTOLOAD = '$Class::Autouse::AUTOLOAD'\n" if $DEBUG;
 	
-	my $method = shift;
+	my $method = $Class::Autouse::AUTOLOAD;
 	_cry( "You were missing a method name" ) unless $method;
 
 	# Loop detection ( Just in case )
-	_cry( "Undefined subroutine &$method called" ) if $chased{ $method } > 10;
 	$chased{ $method }++;
+	_cry( "Undefined subroutine &$method called" ) if $chased{ $method } > 10;
 
 	# Check for special classes
 	my ( $original_class, $function ) = _split_sub( $method );
@@ -179,11 +196,12 @@ sub _chase {
 		$searched{ $class } = 1;
 
 		# Ensure class is loaded
-		load( $class );
+		Class::Autouse->load( $class );
 		
 		# Check for a matching function
-		if ( defined *{"${class}::${function}"}{CODE} ) {
-			return "${class}::${function}";
+		if ( defined *{"${class}::$function"}{CODE} ) {
+			# Goto the matching function
+			goto &{"${class}::$function"};
 		}
 
 		# Add the class to the AUTOLOAD search stack,
@@ -201,10 +219,10 @@ sub _chase {
         		# Set the AUTOLOAD variable in the package
         		# we are about to go to, so the AUTOLOAD
         		# sub there will work properly
-        		${ "${class}::AUTOLOAD" } = $method;
+        		${"${class}::AUTOLOAD"} = $method;
         		        		
-        		# Return the autoload method name to the goto
-        		return "${class}::AUTOLOAD";
+        		# Goto the target method
+        		goto &{"${class}::AUTOLOAD"};
         	}
 	}
 
@@ -213,7 +231,9 @@ sub _chase {
 	_cry( "Can't locate object method \"${function}\" via package \"${original_class}\"" );
 }
 
-
+sub _destroy {
+	# This just handles a call and does nothing
+}
 
 
 
@@ -223,7 +243,7 @@ sub _chase {
 
 # Take a class name and turn it into a file name
 sub _class2file {
-	print "$this_package\::_class2file( '$_[0]' )\n" if $DEBUG;
+	print "Class::Autouse::_class2file( '$_[0]' )\n" if $DEBUG;
 
 	my $class = shift;
 	$class =~ s!::!/!g;
@@ -235,8 +255,8 @@ sub _class2file {
 		
 # Does a class with a particular file name
 # exist somewhere in our include array
-sub _class_exists {
-	print "$this_package\::_class_exists( '$_[0]' )\n" if $DEBUG;
+sub _class_file_exists {
+	print "Class::Autouse::_class_file_exists( '$_[0]' )\n" if $DEBUG;
 	
 	# Scan @INC for the file
 	my $file = shift;
@@ -248,15 +268,14 @@ sub _class_exists {
 
 # Is this a special class or function
 sub _special {
-	print "$this_package\::_special( '$_[0]' )\n" if $DEBUG;
+	print "Class::Autouse::_special( '$_[0]' )\n" if $DEBUG;
 	
-	return 1 if $_[0] eq 'main';
-	return 0;
+	return $special{$_[0]} ? 1 : 0
 }
 
 # Split a fully resolved sub into it's package and sub name
 sub _split_sub($) {
-	print "$this_package\::_split_sub( '$_[0]' )\n" if $DEBUG;
+	print "Class::Autouse::_split_sub( '$_[0]' )\n" if $DEBUG;
 	
 	my $full = shift;
 	my $colons = rindex( $full, '::' );
@@ -268,14 +287,14 @@ sub _split_sub($) {
 
 # Establish our call depth
 sub _call_depth {
-	print "$this_package\::_carp_depth\n" if $DEBUG;
+	print "Class::Autouse::_carp_depth\n" if $DEBUG;
 	
 	# Search up the caller stack to find the first call that isn't us.
 	my $level = 0;
 	while( $level++ < 1000 ) {
 		my @call = caller( $level );		
 		my ( $subclass ) = _split_sub( $call[3] );
-		unless ( $this_package eq $subclass ) {
+		unless ( $subclass eq 'Class::Autouse' ) {
 			# Subtract 1 for this sub's call
 			return $level - 1;
 		}
@@ -285,7 +304,7 @@ sub _call_depth {
 	
 # Die gracefully
 sub _cry { 
-	print "$this_package\::_cry\n" if $DEBUG;
+	print "Class::Autouse::_cry\n" if $DEBUG;
 
 	local $Carp::CarpLevel;
 	$Carp::CarpLevel += _call_depth();
@@ -299,12 +318,11 @@ __END__
 
 =head1 NAME
 
-Class::Autouse - Defer loading of a class or arbitrary classes until one of 
-                 it's methods is invoked.
+Class::Autouse - Defer loading of one or more classes.
 
 =head1 SYNOPSIS
 
-  # Load a class on demand
+  # Load a class on method call
   use Class::Autouse;
   Class::Autouse->autouse( 'CGI' );
   print CGI->header();
@@ -312,16 +330,16 @@ Class::Autouse - Defer loading of a class or arbitrary classes until one of
   # Use as a pragma
   use Class::Autouse qw{CGI};
   
-  # Turn on developer mode
+  # Use developer mode
   use Class::Autouse qw{:devel};
   
-  # Turn on the super loader
+  # Turn on the Super Loader
   use Class::Autouse qw{:superloader};
 
 =head1 DESCRIPTION
 
 Class::Autouse allows you to specify a class the will only load when a 
-method of the class is called. For large classes that might not be used
+method of that class is called. For large classes that might not be used
 during the running of a program, such as Date::Manip, this can save
 you large amounts of memory, and decrease the script load time.
 
@@ -346,7 +364,7 @@ are loaded immediately, just like they would be with a normal 'use'
 statement. This allows error checking to be done while developing,
 at the expense of a larger memory overhead. Developer mode is turned
 on either with the C<devel> method, or using :devel in any of the 
-pragma arguments. For example, this would load CGI.pm immediately
+pragma arguments. For example, this would load CGI.pm immediately.
 
     use Class::Autouse qw{:devel CGI};
 
@@ -365,14 +383,14 @@ and is completely legal.
     print CGI->header;
 
 The super loader can be turned on with either the Class::Autouse->superloader
-method, or the :superloader pragma argument
+method, or the :superloader pragma argument.
 
 =head2 Class, not Module
 
 The terminology "Class loading" instead of "Module loading" is used
 intentionally. Modules will only be loaded if they are acting as a class.
 That is, they will only be loaded during a Class->method call. If you try
-do use a subroutine directory, say with C<Class::method()>, the class will
+do use a subroutine directly, say with C<Class::method()>, the class will
 not be loaded. This limitation is made to allow more powerfull features in
 other areas, because the module can focus on just loading the modules, and
 not have to deal with importing.
@@ -388,7 +406,7 @@ The autouse method sets the class to be loaded as required.
 The load method loads one or more classes into memory. This is functionally
 equivalent to using require to load the class list in, except that load
 will detect and remove the autoloading hook from a previously autoused
-class, whereas as use effectively ignore the class, and not load it
+class, whereas as use effectively ignore the class, and not load it.
 
 =head2 devel
 
@@ -398,8 +416,18 @@ The devel method sets development mode on (argument of 1) or off (argument of 0)
 
 The superloader method turns on the super loader. Please note that once you
 have turned the superloader on, it cannot be turned off. This is due to
-code that might be relying on it being there not being able to load it's
-classes when another piece of code decides they don't want it any more.
+code that might be relying on it being there not being able to autoload it's
+classes when another piece of code decides they don't want it any more, and
+turns the superloader off.
+
+=head2 class_exists
+
+Handy method when doing to sort of jobs that Class::Autouse does. Given
+a class name, it will return 1 if the class can be loaded ( i.e. in @INC ),
+0 if the class can't be loaded, and undef if the class name is invalid.
+
+Note that this does not actually load the class, just tests to see if it can
+be loaded.
 
 =head1 AUTHORS
 

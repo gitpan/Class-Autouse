@@ -6,7 +6,7 @@
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN { $| = 1; print "1..1\n"; }
+BEGIN { $| = 1; print "1..3\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use Class::Autouse;
 $loaded = 1;
@@ -18,3 +18,8 @@ print "ok 1\n";
 # (correspondingly "not ok 13") depending on the success of chunk 13
 # of the test code):
 
+# Test the class_exists class detector
+my $rv = Class::Autouse->class_exists( 'Class::Autouse' );
+print $rv ? "ok 2\n" : "not ok 2\n";
+$rv = Class::Autouse->class_exists( 'Class::Autouse::Nonexistant' );
+print $rv ? "not ok 3\n" : "ok 3\n";
