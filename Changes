@@ -1,5 +1,11 @@
 Revision history for Perl extension Class::Autouse.
 
+0.4  Wed Nov 7 14:03:48 2001
+        - Added autouse_recursive and load_recursive
+        - Fixed major bug in class_exists
+        - Miscellaneous code clean ups
+        - Cleaned up comments
+
 0.3  Wed Sep 26 23:18:10 2001
 	- Improved hook and loader efficiency
 	- Fixed load method. It works now

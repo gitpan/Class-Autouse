@@ -1,5 +1,8 @@
 package Class::Autouse;
 
+# See POD for documentation
+
+require 5.004;
 use strict;
 no strict 'refs';
 
@@ -12,8 +15,9 @@ use UNIVERSAL;
 # Globals
 use vars qw{$VERSION $DEBUG};
 use vars qw{$devel $superloader %chased %special};
+use vars qw{$SEPERATOR};
 BEGIN {
-	$VERSION = 0.3;
+	$VERSION = 0.4;
 	$devel = 0;
 	$superloader = 0;
 	%chased = ();
@@ -23,30 +27,57 @@ BEGIN {
 		UNIVERSAL => 1,
 		CORE      => 1,
 		);
-		
+	
+	# Determine the path seperator
+	if ( "\n" eq "\012" ) { 
+		$SEPERATOR = "/"; # Unix
+	} elsif ( "\n" eq "\015" ) {
+		$SEPERATOR = ":"; # Mac
+	} else {
+		$SEPERATOR = "\\"; # Win32
+	}	
 }
 
 # Developer mode flag
 sub devel {
-	print "Class::Autouse::devel\n" if $DEBUG;
+	print "Class::Autouse::devel()\n" if $DEBUG;
 	
 	$devel = $_[ 1 ] ? 1 : 0; 
-	return $devel;
+}
+
+# Happy Fun Super Loader!
+# The process here to to replace the &UNIVERSAL::AUTOLOAD sub 
+# ( which is just a dummy by default ) with a flexible class loader.
+sub superloader {
+	print "Class::Autouse::superloader()\n" if $DEBUG;
+	
+	return 1 if $superloader;
+	
+	# Overwrite UNIVERSAL::AUTOLOAD and also
+	# catch destroy calls to shortcut them
+	*UNIVERSAL::AUTOLOAD = \&_autoload;
+	*UNIVERSAL::DESTROY = \&_destroy;
+	$superloader = 1;
 }
 
 # The main autouse sub
 sub autouse(@) {
-	print "Class::Autouse::autouse\n" if $DEBUG;
+	print "Class::Autouse::autouse( "
+		. join( ', ', map { "'$_'" } @_ )
+		. " )\n" if $DEBUG;
 	
 	# Remove any reference to ourselves, to allow us to
 	# operate as a function, or a method
 	shift if $_[ 0 ] eq 'Class::Autouse';
 	
 	# Ignore and return if nothing passed
-	return 1 unless @_;
+	return 1 unless scalar @_;
 	
 	my @classes = @_;
 	foreach my $class ( @classes ) {
+		# Skip accidental empty arguments
+		next unless $class;
+		
 		# Control flag handling
 		if ( $class eq ':superloader' ) {
 			Class::Autouse->superloader();
@@ -56,197 +87,269 @@ sub autouse(@) {
 			next;
 		}
 		
-		# Load load if in devel mode
+		# Load now if in devel mode
 		if ( $devel ) {
-			Class::Autouse->load( $class ); next;
+			Class::Autouse->load( $class );
+			next;
 		}	
 		
 		# Get the file name
-		my $file = _class2file( $class );
-		_cry( "'$class' is not a module name" ) unless $file;
-		
-		# Has the module been loaded
+		my $file = _class2file( $class ) or _cry( "'$class' is not a module name" );
+				
+		# Is the class installed?
 		next if exists $INC{ $file };	
-		
-		# Make sure we will be able to 
-		# load the module when we need to
 		unless ( _class_file_exists( $file ) ) {
 			_cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
 		}
 		
-		# Define the AUTOLOAD sub
-		*{"${class}::AUTOLOAD"} = \&_autoload;
-		
-		# Put an %INC lock on the module to stop it being use'd
+		# Add the AUTOLOAD hook and %INC lock to prevent 'use'ing
+		*{"$class\::AUTOLOAD"} = \&_autoload;
 		$INC{$file} = 'Class::Autouse';
 	}
+	return 1;
 }
 
 # Link import to autouse, so we can act as a pragma
-BEGIN {
+BEGIN { 
 	*import = *autouse;
 }
 
-# Happy Fun Super Loader!
-# The process here to to replace the &UNIVERSAL::AUTOLOAD sub 
-# ( which is just a dummy by default ) with a flexible class
-# loader. This is evil, but should work nicely and produce a 
-# nice level of magic :)
-sub superloader {
-	print "Class::Autouse::superloader\n" if $DEBUG;
+# Load a class
+sub load {
+	print "Class::Autouse::load( '$_[1]' )\n" if $DEBUG;
+
+	my $class = $_[1] or _cry( "Did not specify a class to load" );
+
+	# Is it a special module
+	return 1 if $special{$class};
+    	
+	# Get the file
+	my $file = _class2file( $class ) or _cry( "'$class' is not a module name" );
+
+	# Check if the %INC lock exists
+	if ( $INC{$file} eq 'Class::Autouse' ) {	
+		# Remove the AUTOLOAD hook and %INC lock
+		delete ${"$class\::"}{'AUTOLOAD'};
+		delete $INC{ $file };
+	} elsif ( $INC{$file} ) {
+		# Already loaded
+		return 1;
+	}
 	
-	return 1 if $superloader;
+	# Get the full filename
+	my $filename = _class_file_exists( $file );
+	unless ( $filename ) {
+		# File doesn't exist.
+		# Is it a package in another module
+		return 1 if _namespace_occupied( $class );
+
+		# Doesn't exist
+		_cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
+	}			
+
+	print "Class::Autouse::load -> require $file\n" if $DEBUG;
 	
-	# Overwrite UNIVERSAL::AUTOLOAD
-	*UNIVERSAL::AUTOLOAD = \&_autoload;
-	
-	# Attach a dummy sub to the DESTROY method of UNIVERSAL,
-	# so that destroy calls don't make it to UNIVERSAL::AUTOLOAD
-	# Now I THINK that this will be good enough
-	# I'm assuming that nobody would be STUPID enough 
-	# to handle a DESTROY call inside an AUTOLOAD... right...?
-	# The other solution would be to handle it after the _autoload call
-	# but this is a little
-	*UNIVERSAL::DESTROY = \&_destroy;
-	
-	$superloader = 1;
+	# Load the file
+	eval { require ${filename} };
+	_cry( $@ ) if $@;
+
+	return 1;
 }
 
+# Is a particular class installed in out @INC somewhere
 sub class_exists {
-	my $class = shift;
-	my $name = shift;
-	
-	# Convert to a file name
-	my $file = _class2file( $name );
-	return undef unless $file;
-	
+	print "Class::Autouse::class_exists( '$_[1]' )\n" if $DEBUG;
+
 	# Does the file exist
+	my $file = _class2file( $_[1] ) or return undef;
 	return _class_file_exists( $file );
 }
-		
+
+# Recursive methods currently only work withing the scope of the single @INC
+# entry containing the "top" module, and will probably stay this way
+
+# Autouse not only a class, but all others below it.
+sub autouse_recursive {
+	print "Class::Autouse::autouse_recursive( '$_[1]' )\n" if $DEBUG;
+
+	# Hand over to the main recursive method
+	_recursive( $_[1], 'autouse' );
+}
+
+# Load not only a class and all others below it
+sub load_recursive {
+	print "Class::Autouse::load_recursive( '$_[1]' )\n" if $DEBUG;
+	
+	# Hand over the the main recursion method.
+	_recursive( $_[1], 'load' );
+}
+
 
 
 
 
 #####################################################################
-# Main functional blocks
-
-# Load can handle normal loading, loading from hooks,
-# and skipping loading for things already loaded
-sub load {
-	print "Class::Autouse::load( '$_[1]' )\n" if $DEBUG;
-
-	my $class = $_[1];
-	_cry( "Did not specify a class to load" ) unless $class;
-
-	# Is it a special module
-	return 1 if _special( $class );
-    	
-	# Get the file
-	my $file = _class2file( $class );
-	_cry( "'$class' is not a module name" ) unless $file;
-	
-	if ( $INC{ $file } eq 'Class::Autouse' ) {	
-		# One of ours. Remove the loader hook and %INC lock
-		delete ${"${class}::"}{'AUTOLOAD'};
-		delete $INC{ $file };
-
-	} elsif ( $INC{ $file } ) {
-		# Already loaded
-		return 1;
-	}
-	
-	print "Class::Autouse::load -> require $file\n" if $DEBUG;
-	
-	eval { require ${file} };
-	if ( $@ ) {
-		if ( $@ =~ /^Can't\slocate/ ) {
-			_cry( "Can't locate $file in \@INC (\@INC contains: @INC)" );
-		} else {
-			_cry( $@ . "Error loading class" );
-		}
-	}
-}
+# Symbol table private methods, and major logical blocks
+#
+# These get hooked to various places on the symbol table,
+# to enable the autoload functionality
 
 # Get's linked via the symbol table to any AUTOLOADs are required
 sub _autoload {
 	print "Class::Autouse::_autoload(), AUTOLOAD = '$Class::Autouse::AUTOLOAD'\n" if $DEBUG;
 	
-	my $method = $Class::Autouse::AUTOLOAD;
-	_cry( "You were missing a method name" ) unless $method;
+	my $method = $Class::Autouse::AUTOLOAD or _cry( "Missing method name" );
 
 	# Loop detection ( Just in case )
-	$chased{ $method }++;
-	_cry( "Undefined subroutine &$method called" ) if $chased{ $method } > 10;
+	_cry( "Undefined subroutine &$method called" ) if ++$chased{ $method } > 10;
 
 	# Check for special classes
-	my ( $original_class, $function ) = _split_sub( $method );
-	if ( _special( $original_class, $function ) ) {
-		_cry( "Undefined subroutine \&$method called" );
-	}
+	my ( $class, $function ) = _split_sub( $method );
+	_cry( "Undefined subroutine \&$method called" ) if $special{$class};
 
 	# First, search tree, loading as we go
 	my (@search, %searched) = ();
-	my @stack = ( $original_class, 'UNIVERSAL' );
-	while ( @stack ) {
-		my $class = shift @stack;
-
+	my @stack = ( $class, 'UNIVERSAL' );
+	while ( my $c = shift @stack ) {
 		# Skip if duplicate
-		next if $searched{ $class };
-		$searched{ $class } = 1;
+		next if $searched{$c};
+		$searched{$c} = 1;
 
 		# Ensure class is loaded
-		Class::Autouse->load( $class );
+		Class::Autouse->load($c);
 		
 		# Check for a matching function
-		if ( defined *{"${class}::$function"}{CODE} ) {
-			# Goto the matching function
-			goto &{"${class}::$function"};
-		}
+		goto &{"$c\::$function"} if defined *{"$c\::$function"}{CODE};
 
 		# Add the class to the AUTOLOAD search stack,
 		# and add the @ISA to the function search stack
-		push @search, $class;
-        	unshift @stack, @{"${class}::ISA"};
+		push @search, $c unless $c eq 'UNIVERSAL';
+        	unshift @stack, @{"$c\::ISA"};
 	}
-
-	# Remove UNIVERSAL::AUTOLOAD
-	pop @search if $search[-1] eq 'UNIVERSAL';
 	
 	# Check for package AUTOLOADs
-	foreach my $class ( @search ) {
-        	if ( defined *{ "${class}::AUTOLOAD" }{CODE} ) {
+	foreach my $c ( @search ) {
+        	if ( defined *{ "$c\::AUTOLOAD" }{CODE} ) {
         		# Set the AUTOLOAD variable in the package
         		# we are about to go to, so the AUTOLOAD
         		# sub there will work properly
-        		${"${class}::AUTOLOAD"} = $method;
+        		${"$c\::AUTOLOAD"} = $method;
         		        		
         		# Goto the target method
-        		goto &{"${class}::AUTOLOAD"};
+        		goto &{"$c\::AUTOLOAD"};
         	}
 	}
 
 	# Can't find the method anywhere. 
 	# Throw the same error Perl does
-	_cry( "Can't locate object method \"${function}\" via package \"${original_class}\"" );
+	_cry( "Can't locate object method \"$function\" via package \"$class\"" );
 }
 
 sub _destroy {
+	print "Class::Autouse::_destroy()\n" if $DEBUG;
+	
 	# This just handles a call and does nothing
 }
+
+# Perform an action on a class recursively
+sub _recursive {
+	print "Class::Autouse::_recursive( '$_[0]', '$_[1]' )\n" if $DEBUG;
+		
+	# Act on the parent class
+	my ( $parent, $method ) = @_;
+	Class::Autouse->$method( $parent );
+	
+	# Now get the list of child classes
+	my $children = _child_classes( $parent );
+	return 1 unless $children;
+	
+	# Act on each of the children
+	foreach ( @$children ) {
+		Class::Autouse->$method( $_ );
+	}
+}
+
+# Find all the child classes for a parent class
+sub _child_classes {
+	print "Class::Autouse::_child_classes( '$_[0]' )\n" if $DEBUG;
+
+	# Get the classes file name
+	my $base_class = shift;
+	my $base_file = _class2file( $base_class );
+	
+	# Find where it is in @INC
+	my $inc_path = undef;
+	foreach ( @INC ) {
+		if ( -f "$_$SEPERATOR$base_file" ) {
+			$inc_path = $_;
+			last;
+		}
+	}
+	return undef unless defined $inc_path;
+	
+	# Does the file have a subdirectory
+	# i.e. Are there child classes
+	my $child_path = substr( $base_file, 0, length($base_file) - 3 );
+	my $child_path_full = "$inc_path$SEPERATOR$child_path";
+	return 0 unless ( -d $child_path_full and -r $child_path_full );
+	
+	# Set up the initial scan state
+	my @files = ();
+	my @queue = ( $child_path );
+	
+	# Main scan loop
+	my ( $file, @buffer );
+	while ( $file = pop @queue ) {
+		# Read in the raw file list
+		next unless opendir( FILELIST, "$inc_path$SEPERATOR$file" );
+		@buffer = readdir FILELIST;
+		closedir FILELIST;
+		
+		# Iterate over them
+		foreach ( @buffer ) {
+			# Filter out the dot files
+			next if $_ eq '.' or $_ eq '..';
+			$_ = "$file$SEPERATOR$_";
+			
+			# Add to the queue if it's a directory we can descend
+			if ( -d "$inc_path$SEPERATOR$_" and -r "$inc_path$SEPERATOR$_" ) {
+				push @queue, $_;
+				next;
+			}
+					
+			# Filter
+			next unless substr( $_, length($_) - 3 ) eq '.pm';
+			next if substr( $_, 0, 1 ) eq '.';
+			next unless -f "$inc_path$SEPERATOR$_";
+			
+			# Add to the file hash
+			push @files, $_;
+		}
+	}
+	
+	# Convert the file names to modules names
+	foreach ( @files ) {
+		$_ = substr( $_, 0, length($_) - 3 );
+		$_ =~ s/$SEPERATOR/::/g;
+	}
+		
+	# Return the results
+	return scalar @files ? \@files : 0;
+}
+
 
 
 
 
 #####################################################################
-# Support subs
+# Private support methods
 
 # Take a class name and turn it into a file name
 sub _class2file {
 	print "Class::Autouse::_class2file( '$_[0]' )\n" if $DEBUG;
 
 	my $class = shift;
-	$class =~ s!::!/!g;
+	$class =~ s!::!$SEPERATOR!g;
 	
 	# Format check the result.
 	return undef unless $class =~ /^[\w\/]+$/;
@@ -259,18 +362,23 @@ sub _class_file_exists {
 	print "Class::Autouse::_class_file_exists( '$_[0]' )\n" if $DEBUG;
 	
 	# Scan @INC for the file
-	my $file = shift;
-	foreach ( @INC ) { 
-		return 1 if -f "$_/$file";
+	my $file = shift or return undef;
+	foreach ( @INC ) {
+		return "$_$SEPERATOR$file" if -f "$_$SEPERATOR$file";
 	}
 	return undef;
 }
 
-# Is this a special class or function
-sub _special {
-	print "Class::Autouse::_special( '$_[0]' )\n" if $DEBUG;
+# Is a namespace occupied by anything significant
+sub _namespace_occupied {
+	my $class = shift;
 	
-	return $special{$_[0]} ? 1 : 0
+	# Get the list of glob names
+	foreach ( keys %{$class.'::'} ) {
+		# Only check for methods, since that's all that's reliable
+		return 1 if defined *{"$class\::$_"}{CODE}; 
+	}
+	return 0;	
 }
 
 # Split a fully resolved sub into it's package and sub name
@@ -385,6 +493,18 @@ and is completely legal.
 The super loader can be turned on with either the Class::Autouse->superloader
 method, or the :superloader pragma argument.
 
+=head2 Recursion
+
+As an alternative to the super loader, the autouse_recursive and
+load_recursive methods can be used to autouse or load an entire tree of
+classes. For example, the following would give you access to all the URI
+related classes installed on the machine.
+
+    Class::Autouse->autouse_recursive( 'URI' );
+
+Please note that the loadings will only occur down a single branch of the
+include path, whichever the top class is located in.
+
 =head2 Class, not Module
 
 The terminology "Class loading" instead of "Module loading" is used
@@ -422,17 +542,26 @@ turns the superloader off.
 
 =head2 class_exists
 
-Handy method when doing to sort of jobs that Class::Autouse does. Given
+Handy method when doing the sort of jobs that Class::Autouse does. Given
 a class name, it will return 1 if the class can be loaded ( i.e. in @INC ),
 0 if the class can't be loaded, and undef if the class name is invalid.
 
 Note that this does not actually load the class, just tests to see if it can
-be loaded.
+be loaded. Loading can still fail.
+
+=head2 autouse_recursive
+
+The same as the C<autouse> method, but autouses recursively
+
+=head2 load_recursive
+
+The same as the C<load> method, but loads recursively. Great for checking that
+a large class tree that might not always be loaded will load correctly.
 
 =head1 AUTHORS
 
- Adam Kennedy, cpan@ali.as
- Rob Napier,   rnapier@employees.org
+ Adam Kennedy, cpan@ali.as ( maintainer )          
+ Rob Napier,   rnapier@employees.org 
 
 =head1 SEE ALSO
 

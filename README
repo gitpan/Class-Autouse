@@ -68,6 +68,19 @@ DESCRIPTION
     Class::Autouse->superloader method, or the :superloader pragma
     argument.
 
+  Recursion
+
+    As an alternative to the super loader, the autouse_recursive and
+    load_recursive methods can be used to autouse or load an entire
+    tree of classes. For example, the following would give you
+    access to all the URI related classes installed on the machine.
+
+        Class::Autouse->autouse_recursive( 'URI' );
+
+    Please note that the loadings will only occur down a single
+    branch of the include path, whichever the top class is located
+    in.
+
   Class, not Module
 
     The terminology "Class loading" instead of "Module loading" is
@@ -108,17 +121,27 @@ METHODS
 
   class_exists
 
-    Handy method when doing to sort of jobs that Class::Autouse
+    Handy method when doing the sort of jobs that Class::Autouse
     does. Given a class name, it will return 1 if the class can be
     loaded ( i.e. in @INC ), 0 if the class can't be loaded, and
     undef if the class name is invalid.
 
     Note that this does not actually load the class, just tests to
-    see if it can be loaded.
+    see if it can be loaded. Loading can still fail.
+
+  autouse_recursive
+
+    The same as the `autouse' method, but autouses recursively
+
+  load_recursive
+
+    The same as the `load' method, but loads recursively. Great for
+    checking that a large class tree that might not always be loaded
+    will load correctly.
 
 AUTHORS
-     Adam Kennedy, cpan@ali.as
-     Rob Napier,   rnapier@employees.org
+     Adam Kennedy, cpan@ali.as ( maintainer )          
+     Rob Napier,   rnapier@employees.org 
 
 SEE ALSO
     autoload, autoclass
