@@ -19,11 +19,11 @@ use File::Spec ();
 use List::Util ();
 
 # Globals
-use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD};    # Load environment
+use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD $NOSTAT};    # Load environment
 use vars qw{$HOOKS %chased %loaded %special %bad}; # Working data
 use vars qw{*_UNIVERSAL_can};                      # Subroutine storage
 BEGIN {
-	$VERSION = '1.17';
+	$VERSION = '1.18';
 	$DEBUG   = 0;
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
@@ -34,6 +34,9 @@ BEGIN {
 
 	# We always start with the superloader off
 	$SUPERLOAD = 0;
+
+	# Disable stating for situations where modules are on remote disks
+	$NOSTAT = 0;
 
 	# AUTOLOAD hook counter
 	$HOOKS = 0;
@@ -125,6 +128,9 @@ sub autouse {
 				# Turn on debugging
 				$DEBUG = 1;
 				print _call_depth(1) . "Class::Autouse::autoload -> Debugging Activated.\n";
+			} elsif ( $class eq ':nostat' ) {
+				# Disable stat checks
+				$NOSTAT = 1;
 			}
 			next;
 		}
@@ -138,7 +144,7 @@ sub autouse {
 		# Does the file for the class exist?
 		my $file = _class_file($class);
 		next if exists $INC{$file};
-		unless ( _file_exists($file) ) {
+		unless ( $NOSTAT or _file_exists($file) ) {
 			my $inc = join ', ', @INC;
 			_cry "Can't locate $file in \@INC (\@INC contains: $inc)";
 		}
@@ -630,7 +636,7 @@ will look something like
 
 =head2 Developer Mode
 
-Class::Autouse features a developer mode. In developer mode, classes
+C<Class::Autouse> features a developer mode. In developer mode, classes
 are loaded immediately, just like they would be with a normal 'use'
 statement (although the import sub isn't called). This allows error
 checking to be done while developing, at the expense of a larger
@@ -645,6 +651,12 @@ command, for a large number of modules it lets you use autoloading
 notation, and just comment or uncomment a single line to turn developer
 mode on or off. You can leave it on during development, and turn it
 off for speed reasons when deploying.
+
+=head2 No Stat Mode
+
+For situations where a module exists on a remote disk that is relatively
+expensive to get to, you can call C<Class::Autouse> with the :nostat param
+to disable initial file existance checking at hook time.
 
 =head2 Super Loader
 

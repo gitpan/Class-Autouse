@@ -56,8 +56,8 @@ DESCRIPTION
         etc...
 
   Developer Mode
-    Class::Autouse features a developer mode. In developer mode, classes are
-    loaded immediately, just like they would be with a normal 'use'
+    "Class::Autouse" features a developer mode. In developer mode, classes
+    are loaded immediately, just like they would be with a normal 'use'
     statement (although the import sub isn't called). This allows error
     checking to be done while developing, at the expense of a larger memory
     overhead. Developer mode is turned on either with the "devel" method, or
@@ -71,6 +71,11 @@ DESCRIPTION
     notation, and just comment or uncomment a single line to turn developer
     mode on or off. You can leave it on during development, and turn it off
     for speed reasons when deploying.
+
+  No Stat Mode
+    For situations where a module exists on a remote disk that is relatively
+    expensive to get to, you can call "Class::Autouse" with the :nostat
+    param to disable initial file existance checking at hook time.
 
   Super Loader
     Turning on the Class::Autouse super loader allows you to automatically

@@ -32,3 +32,4 @@ t/01_main.t
 t/02_parent.t
 t/03_prefork.t
 t/04_recursive.t
+t/99_pod.t

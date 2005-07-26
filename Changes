@@ -1,5 +1,9 @@
 Revision history for Perl extension Class::Autouse.
 
+1.18 Tue Jul 26 2005
+	- Added :nostat module to disable the initial stat checks
+	  of modules.
+
 1.17 Tue Mar  8 2005
 	- Added include('ExtUtils::AutoInstall') by request, to make
 	  life easier when installing svk, although I have NFI why :/
