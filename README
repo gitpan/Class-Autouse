@@ -2,6 +2,9 @@ NAME
     Class::Autouse - Run-time class loading on first method call
 
 SYNOPSIS
+      # Debugging should be set before the first use
+      $Class::Autouse::DEBUG = 1;
+  
       # Load a class on method call
       use Class::Autouse;
       Class::Autouse->autouse( 'CGI' );
@@ -9,9 +12,6 @@ SYNOPSIS
 
       # Use as a pragma
       use Class::Autouse qw{CGI};
-
-      # Turn on debugging
-      use Class::Autouse qw{:debug};
 
       # Turn on developer mode
       use Class::Autouse qw{:devel};
@@ -39,11 +39,9 @@ DESCRIPTION
        Class::Autouse->autouse( 'This::That' );
 
   The Internal Debugger
-    Given the ":debug" pragma argument, Class::Autouse will dump detailed
-    internal call information. This can be usefull when an error has
-    occurred that may be a little difficult to debug, and some more
-    inforamtion about when the problem has actually occurred is required.
-    Debug messages are written to STDOUT, and will look something like
+    If the $Class::Autouse::DEBUG variable is true when "Class::Autouse" is
+    first loaded, debugging will be compiled in. This debugging produces
+    output like the following.
 
      Class::Autouse::autouse_recursive( 'Foo' )
       Class::Autouse::_recursive( 'Foo', 'load' )
@@ -54,6 +52,10 @@ DESCRIPTION
         Class::Autouse::load -> Loading in Foo/Bar.pm
        Class::Autouse::load( 'Foo::More' )
         etc...
+
+    Please note that because this is optimised out if not used, you can no
+    longer (since 1.20) enable debugging at run-time. This decision was made
+    to remove a large number of unneeded branching and speed up loading.
 
   Developer Mode
     "Class::Autouse" features a developer mode. In developer mode, classes
@@ -72,10 +74,13 @@ DESCRIPTION
     mode on or off. You can leave it on during development, and turn it off
     for speed reasons when deploying.
 
-  No Stat Mode
-    For situations where a module exists on a remote disk that is relatively
-    expensive to get to, you can call "Class::Autouse" with the :nostat
-    param to disable initial file existance checking at hook time.
+  No-Stat Mode
+    For situations where a module exists on a remote disk or another
+    relatively expensive location, you can call "Class::Autouse" with the
+    :nostat param to disable initial file existance checking at hook time.
+
+      # Disable autoload-time file existance checking
+      use Class::Autouse qw{:nostat};
 
   Super Loader
     Turning on the Class::Autouse super loader allows you to automatically
@@ -110,16 +115,21 @@ DESCRIPTION
     loading the modules, and not have to deal with importing.
 
   mod_perl
-    The methods that Class::Autouse uses are not compatible with mod_perl.
-    In particular with reloader modules like Apache::Reload. Class::Autouse
-    detects the presence of mod_perl and acts as normal, but will always
-    load all classes immediately, equivalent to having developer mode
-    enabled.
+    The mechanism that "Class::Autouse" uses is not compatible with
+    mod_perl. In particular with reloader modules like Apache::Reload.
+    Class::Autouse detects the presence of mod_perl and acts as normal, but
+    will always load all classes immediately, equivalent to having developer
+    mode enabled.
 
     This is actually beneficial, as under mod_perl classes should be
     preloaded in the parent mod_perl process anyway, to prevent them having
     to be loaded by the Apache child classes. It also saves HUGE amounts of
     memory.
+
+  prefork
+    As for mod_perl, "Class::Autouse" is compatible with the prefork module,
+    and all modules autoloaded will be loaded before forking correctly, when
+    requested by prefork.
 
 METHODS
   autouse $class
@@ -169,7 +179,7 @@ SUPPORT
     author.
 
 AUTHORS
-    Adam Kennedy (Maintainer), <http://ali.as/>, cpan@ali.as
+    Adam Kennedy (Creator and Maintainer), <http://ali.as/>, cpan@ali.as
 
     Rob Napier (No longer involved), rnapier@employees.org
 

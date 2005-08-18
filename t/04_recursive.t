@@ -29,4 +29,3 @@ ok( T->method, 'T is loaded' );
 ok( T::A->method, 'T::A is loaded' );
 ok( T::B->method, 'T::B is loaded' );
 ok( T::B::G->method, 'T::B::G is loaded' );
-

@@ -2,35 +2,43 @@ package Class::Autouse;
 
 # See POD at end of file for documentation
 
-### Memory Overhead: 180K
+### Memory Overhead: 396K
 
 use 5.005;
 use strict;
-no strict 'refs'; # We do a LOT of bad ref stuff
+no strict 'refs'; # We _really_ abuse refs :)
 use UNIVERSAL ();
+
+# Debugging
+# Handle debugging via a constant for speed reasons
+use vars qw{$DEBUG};
+BEGIN {
+	$DEBUG = '' unless defined $DEBUG;
+}
+use constant DEBUG => $DEBUG;
+print "Class::Autouse::autoload -> Debugging Activated.\n" if DEBUG;
 
 # Become an exporter so we don't get complaints when we act as a pragma.
 # I don't fully understand the reason for this, but it works.
 use base 'Exporter';
 
 # Load required modules
+# Luckily, these are so common they are basically free
 use Carp       ();
 use File::Spec ();
 use List::Util ();
 
 # Globals
-use vars qw{$VERSION $DEBUG $DEVEL $SUPERLOAD $NOSTAT};    # Load environment
-use vars qw{$HOOKS %chased %loaded %special %bad}; # Working data
-use vars qw{*_UNIVERSAL_can};                      # Subroutine storage
+use vars qw{ $VERSION $DEVEL $SUPERLOAD $NOSTAT }; # Load environment
+use vars qw{ %SPECIAL %LOADED %BAD              }; # Special cases
+use vars qw{ $HOOKS %chased *_UNIVERSAL_can     }; # Working information
+
+# Compile-time Initialisation and Optimisation
 BEGIN {
-	$VERSION = '1.18';
-	$DEBUG   = 0;
+	$VERSION = '1.20';
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
 	*_UNIVERSAL_can = *UNIVERSAL::can{CODE};
-
-	# Start with devel mode off.
-	$DEVEL = 0;
 
 	# We always start with the superloader off
 	$SUPERLOAD = 0;
@@ -41,21 +49,18 @@ BEGIN {
 	# AUTOLOAD hook counter
 	$HOOKS = 0;
 
-	# Anti-loop protection. "Have we tried to autoload a method before?"
-	# Contains fully referenced sub names.
-	%chased = ();
-
 	# ERRATA
 	# Special classes are internal and should be left alone.
 	# Loaded modules are those already loaded by us.
 	# Bad classes are those that are incompatible with us.
-	%special = map { $_ => 1 } qw{CORE main ARRAY HASH SCALAR REF UNIVERSAL};
-	%loaded  = map { $_ => 1 } qw{UNIVERSAL Exporter Carp File::Spec};
-	%bad     = map { $_ => 1 } qw{IO::File};
-}
+	%SPECIAL = map { $_ => 1 } qw{ CORE main ARRAY HASH SCALAR REF UNIVERSAL };
+	%LOADED  = map { $_ => 1 } qw{ UNIVERSAL Exporter Carp File::Spec        };
+	%BAD     = map { $_ => 1 } qw{ IO::File                                  };
 
-# Define prototypes
-sub _cry($);
+	# "Have we tried to autoload a method before?"
+	# Anti-loop protection. Contains fully referenced sub names
+	%chased = ();
+}
 
 
 
@@ -67,7 +72,7 @@ sub _cry($);
 # Developer mode flag.
 # Cannot be turned off once turned on.
 sub devel {
-	_debug(\@_, 1) if $DEBUG;
+	_debug(\@_, 1) if DEBUG;
 
 	# Enable if not already
 	return 1 if $DEVEL;
@@ -86,7 +91,7 @@ sub devel {
 # The process here is to replace the &UNIVERSAL::AUTOLOAD sub
 # ( which is just a dummy by default ) with a flexible class loader.
 sub superloader {
-	_debug(\@_, 1) if $DEBUG;
+	_debug(\@_, 1) if DEBUG;
 
 	unless ( $SUPERLOAD ) {
 		# Overwrite UNIVERSAL::AUTOLOAD and catch any
@@ -113,7 +118,7 @@ sub autouse {
 	# Ignore calls with no arguments
 	return 1 unless @_;
 
-	_debug(\@_) if $DEBUG;
+	_debug(\@_) if DEBUG;
 
 	foreach my $class ( grep { $_ } @_ ) {
 		# Control flag handling
@@ -124,10 +129,6 @@ sub autouse {
 			} elsif ( $class eq ':devel' ) {
 				# Turn on devel mode
 				Class::Autouse->devel(1);
-			} elsif ( $class eq ':debug' ) {
-				# Turn on debugging
-				$DEBUG = 1;
-				print _call_depth(1) . "Class::Autouse::autoload -> Debugging Activated.\n";
 			} elsif ( $class eq ':nostat' ) {
 				# Disable stat checks
 				$NOSTAT = 1;
@@ -136,7 +137,7 @@ sub autouse {
 		}
 
 		# Load now if in devel mode, or if its a bad class
-		if ( $DEVEL || $bad{$class} ) {
+		if ( $DEVEL || $BAD{$class} ) {
 			Class::Autouse->load( $class );
 			next;
 		}
@@ -146,7 +147,7 @@ sub autouse {
 		next if exists $INC{$file};
 		unless ( $NOSTAT or _file_exists($file) ) {
 			my $inc = join ', ', @INC;
-			_cry "Can't locate $file in \@INC (\@INC contains: $inc)";
+			_cry("Can't locate $file in \@INC (\@INC contains: $inc)");
 		}
 
 		# Don't actually do anything if the superloader is on.
@@ -176,10 +177,10 @@ sub import { shift->autouse(@_) }
 
 # Completely load a class ( The class and all its dependencies ).
 sub load {
-	_debug(\@_, 1) if $DEBUG;
+	_debug(\@_, 1) if DEBUG;
 
-	my $class = $_[1] or _cry 'No class name specified to load';
-	return 1 if $loaded{$class};
+	my $class = $_[1] or _cry('No class name specified to load');
+	return 1 if $LOADED{$class};
 
 	# Load the entire ISA tree
 	my @stack  = ( $class );
@@ -189,7 +190,7 @@ sub load {
 		next if $seen{$c}++;
 
 		# Ensure class is loaded
-		_load($c) unless $loaded{$c};
+		_load($c) unless $LOADED{$c};
 
 		# Add the class to the search list,
 		# and add the @ISA to the load stack.
@@ -205,7 +206,7 @@ sub load {
 # Is a particular class installed in out @INC somewhere
 # OR is it loaded in our program already
 sub class_exists {
-	_debug(\@_, 1) if $DEBUG;
+	_debug(\@_, 1) if DEBUG;
 	_namespace_occupied($_[1]) or _file_exists($_[1]);
 }
 
@@ -215,7 +216,7 @@ sub class_exists {
 # Returns 0 if the class is not loaded ( or autouse'd )
 # Returns 1 if the class can be used.
 sub can_call_methods {
-	_debug(\@_, 1) if $DEBUG;
+	_debug(\@_, 1) if DEBUG;
 	_namespace_occupied($_[1]) or exists $INC{_class_file($_[1])};
 }
 
@@ -224,7 +225,7 @@ sub can_call_methods {
 
 # Autouse not only a class, but all others below it.
 sub autouse_recursive {
-	_debug(\@_, 1) if $DEBUG;
+	_debug(\@_, 1) if DEBUG;
 
 	# Just load if in devel mode
 	return Class::Autouse->load_recursive($_[1]) if $DEVEL;
@@ -238,7 +239,7 @@ sub autouse_recursive {
 
 # Load not only a class and all others below it
 sub load_recursive {
-	_debug(\@_, 1) if $DEBUG;
+	_debug(\@_, 1) if DEBUG;
 
 	# Load the parent class, and its children
 	foreach ( $_[1], _child_classes($_[1]) ) {
@@ -260,15 +261,15 @@ sub load_recursive {
 
 # Get's linked via the symbol table to any AUTOLOADs are required
 sub _AUTOLOAD {
-	_debug(\@_, 0, ", AUTOLOAD = '$Class::Autouse::AUTOLOAD'") if $DEBUG;
+	_debug(\@_, 0, ", AUTOLOAD = '$Class::Autouse::AUTOLOAD'") if DEBUG;
 
 	# Loop detection ( Just in case )
-	my $method = $Class::Autouse::AUTOLOAD or _cry 'Missing method name';
-	_cry "Undefined subroutine &$method called" if ++$chased{ $method } > 10;
+	my $method = $Class::Autouse::AUTOLOAD or _cry('Missing method name');
+	_cry("Undefined subroutine &$method called") if ++$chased{ $method } > 10;
 
 	# Don't bother with special classes
 	my ($class, $function) = $method =~ m/^(.*)::(.*)$/s;
-	_cry "Undefined subroutine &$method called" if $special{$class};
+	_cry("Undefined subroutine &$method called") if $SPECIAL{$class};
 
 	# Load the class and it's dependancies, and get the search path
 	my @search = Class::Autouse->load($class);
@@ -287,18 +288,22 @@ sub _AUTOLOAD {
 	}
 
 	# Can't find the method anywhere. Throw the same error Perl does.
-	_cry "Can't locate object method \"$function\" via package \"$class\"";
+	_cry("Can't locate object method \"$function\" via package \"$class\"");
 }
 
 # This just handles the call and does nothing
-sub _DESTROY { _debug(\@_) if $DEBUG }
+sub _DESTROY {
+	_debug(\@_) if DEBUG;
+}
 
 # This is the replacement for UNIVERSAL::can
 sub _can {
 	my $class = ref $_[0] || $_[0] || return undef;
 
 	# Shortcut for the most likely cases
-	goto &_UNIVERSAL_can if $loaded{$class} or defined @{"${class}::ISA"};
+	if ( $LOADED{$class} or defined @{"${class}::ISA"} ) { 
+		goto &_UNIVERSAL_can;
+	}
 
 	# Does it look like a package?
 	$class =~ /^[^\W\d]\w*(?:(?:'|::)[^\W\d]\w*)*$/o or return undef;
@@ -315,7 +320,7 @@ sub _can {
 	} elsif ( _namespace_occupied($class) ) {
 		# Superloader is on, but there is something already in the class
 		# This can't be the autouse loader, because we would have caught
-		# that case already
+		# that case already.
 		$load = 0;
 	} else {
 		# The rules of the superloader say we assume loaded unless we can
@@ -324,10 +329,10 @@ sub _can {
 	}
 
 	# If needed, load the class and all its dependencies.
-	# UNIVERSAL::can never dies, so we shouldn't either.
-	# Ignore, errors. If something goes wrong,
-	# let the real UNIVERSAL::can have a short at it anyway.
-	eval { Class::Autouse->load($class) } if $load;
+	if ( $load ) {
+		eval { Class::Autouse->load($class) };
+		die $@ if $@;
+	}
 
 	# Hand off to the real UNIVERSAL::can
 	goto &_UNIVERSAL_can;
@@ -342,18 +347,18 @@ sub _can {
 
 # Load a single class
 sub _load ($) {
-	_debug(\@_) if $DEBUG;
+	_debug(\@_) if DEBUG;
 
 	# Don't attempt to load special classes
-	my $class = shift or _cry 'Did not specify a class to load';
-	return 1 if $special{$class};
+	my $class = shift or _cry('Did not specify a class to load');
+	return 1 if $SPECIAL{$class};
 
 	# Run some checks
 	my $file = _class_file($class);
 	if ( defined $INC{$file} ) {
 		# If the %INC lock is set to any other value, the file is
 		# already loaded. We do not need to do anything.
-		return $loaded{$class} = 1 if $INC{$file} ne 'Class::Autouse';
+		return $LOADED{$class} = 1 if $INC{$file} ne 'Class::Autouse';
 
 		# Because we autoused it earlier, we know the file for this
 		# class MUST exist.
@@ -364,25 +369,28 @@ sub _load ($) {
 	} elsif ( ! _file_exists($file) ) {
 		# File doesn't exist. We might still be OK, if the class was
 		# defined in some other module that got loaded a different way.
-		return $loaded{$class} = 1 if _namespace_occupied($class);
+		return $LOADED{$class} = 1 if _namespace_occupied($class);
 		my $inc = join ', ', @INC;
-		_cry "Can't locate $file in \@INC (\@INC contains: $inc)";
+		_cry("Can't locate $file in \@INC (\@INC contains: $inc)");
 	}
 
 	# Load the file
-	print _call_depth(1) . "  Class::Autouse::load -> Loading in $file\n" if $DEBUG;
-	eval { CORE::require $file }; _cry $@ if $@;
+	print _call_depth(1) . "  Class::Autouse::load -> Loading in $file\n" if DEBUG;
+	eval {
+		CORE::require($file);
+	};
+	_cry($@) if $@;
 
 	# Give back UNIVERSAL::can if there are no other hooks
 	--$HOOKS or _UPDATE_CAN();
 
-	$loaded{$class} = 1;
+	$LOADED{$class} = 1;
 }
 
 # Find all the child classes for a parent class.
 # Returns in the list context.
 sub _child_classes ($) {
-	_debug(\@_) if $DEBUG;
+	_debug(\@_) if DEBUG;
 
 	# Find where it is in @INC
 	my $base_file = _class_file(shift);
@@ -444,7 +452,7 @@ sub _child_classes ($) {
 # Does a class or file exists somewhere in our include path. For
 # convenience, returns the unresolved file name ( even if passed a class )
 sub _file_exists ($) {
-	_debug(\@_) if $DEBUG;
+	_debug(\@_) if DEBUG;
 
 	# What are we looking for?
 	my $file = shift or return undef;
@@ -463,7 +471,7 @@ sub _file_exists ($) {
 
 # Is a namespace occupied by anything significant
 sub _namespace_occupied ($) {
-	_debug(\@_) if $DEBUG;
+	_debug(\@_) if DEBUG;
 
 	# Handle the most likely case
 	my $class = shift or return undef;
@@ -481,12 +489,14 @@ sub _namespace_occupied ($) {
 }
 
 # For a given class, get the file name
-sub _class_file ($) { join( '/', split /(?:\'|::)/, shift ) . '.pm' }
+sub _class_file ($) {
+	join( '/', split /(?:\'|::)/, shift ) . '.pm';
+}
 
 # Establish our call depth
 sub _call_depth {
 	my $spaces = shift;
-	if ( $DEBUG and ! $spaces ) { _debug(\@_); }
+	if ( DEBUG and ! $spaces ) { _debug(\@_) }
 
 	# Search up the caller stack to find the first call that isn't us.
 	my $level = 0;
@@ -504,15 +514,17 @@ sub _call_depth {
 }
 
 # Die gracefully
-sub _cry ($) {
-	_debug() if $DEBUG;
-
+sub _cry {
+	_debug() if DEBUG;
 	local $Carp::CarpLevel;
 	$Carp::CarpLevel += _call_depth();
 	Carp::croak( $_[0] );
 }
 
 # Adaptive debug print generation
+BEGIN {
+	eval <<'END_DEBUG' if DEBUG;
+
 sub _debug {
 	my $args    = shift;
 	my $method  = !! shift;
@@ -524,8 +536,10 @@ sub _debug {
 		shift @mapped if $method;
 		$msg .= @mapped ? '( ' . ( join ', ', @mapped ) . ' )' : '()';
 	}
-
 	print "$msg$message\n";
+}
+
+END_DEBUG
 }
 
 
@@ -559,7 +573,7 @@ BEGIN {
 		$DEVEL = 1 if $ENV{MOD_PERL};
 	} else {
 		# Go into devel mode when prefork is enabled
-		$loaded{prefork} = 1;
+		$LOADED{prefork} = 1;
 		eval "prefork::notify( sub { Class::Autouse->devel(1) } )";
 		die $@ if $@;
 	}
@@ -577,6 +591,9 @@ Class::Autouse - Run-time class loading on first method call
 
 =head1 SYNOPSIS
 
+  # Debugging should be set before the first use
+  $Class::Autouse::DEBUG = 1;
+  
   # Load a class on method call
   use Class::Autouse;
   Class::Autouse->autouse( 'CGI' );
@@ -584,9 +601,6 @@ Class::Autouse - Run-time class loading on first method call
 
   # Use as a pragma
   use Class::Autouse qw{CGI};
-
-  # Turn on debugging
-  use Class::Autouse qw{:debug};
 
   # Turn on developer mode
   use Class::Autouse qw{:devel};
@@ -617,12 +631,9 @@ is equivalent to
 
 =head2 The Internal Debugger
 
-Given the C<:debug> pragma argument, Class::Autouse will dump
-detailed internal call information. This can be usefull when an
-error has occurred that may be a little difficult to debug, and
-some more inforamtion about when the problem has actually
-occurred is required. Debug messages are written to STDOUT, and
-will look something like
+If the C<$Class::Autouse::DEBUG> variable is true when C<Class::Autouse>
+is first loaded, debugging will be compiled in. This debugging produces
+output like the following.
 
  Class::Autouse::autouse_recursive( 'Foo' )
   Class::Autouse::_recursive( 'Foo', 'load' )
@@ -633,6 +644,10 @@ will look something like
     Class::Autouse::load -> Loading in Foo/Bar.pm
    Class::Autouse::load( 'Foo::More' )
     etc...
+
+Please note that because this is optimised out if not used, you can
+no longer (since 1.20) enable debugging at run-time. This decision was
+made to remove a large number of unneeded branching and speed up loading.
 
 =head2 Developer Mode
 
@@ -652,11 +667,14 @@ notation, and just comment or uncomment a single line to turn developer
 mode on or off. You can leave it on during development, and turn it
 off for speed reasons when deploying.
 
-=head2 No Stat Mode
+=head2 No-Stat Mode
 
-For situations where a module exists on a remote disk that is relatively
-expensive to get to, you can call C<Class::Autouse> with the :nostat param
+For situations where a module exists on a remote disk or another relatively
+expensive location, you can call C<Class::Autouse> with the :nostat param
 to disable initial file existance checking at hook time.
+
+  # Disable autoload-time file existance checking
+  use Class::Autouse qw{:nostat};
 
 =head2 Super Loader
 
@@ -695,14 +713,20 @@ not have to deal with importing.
 
 =head2 mod_perl
 
-The methods that Class::Autouse uses are not compatible with mod_perl. In
-particular with reloader modules like Apache::Reload. Class::Autouse detects
-the presence of mod_perl and acts as normal, but will always load all
-classes immediately, equivalent to having developer mode enabled.
+The mechanism that C<Class::Autouse> uses is not compatible with L<mod_perl>.
+In particular with reloader modules like L<Apache::Reload>. Class::Autouse
+detects the presence of mod_perl and acts as normal, but will always load
+all classes immediately, equivalent to having developer mode enabled.
 
 This is actually beneficial, as under mod_perl classes should be preloaded
 in the parent mod_perl process anyway, to prevent them having to be loaded
 by the Apache child classes. It also saves HUGE amounts of memory.
+
+=head2 prefork
+
+As for mod_perl, C<Class::Autouse> is compatible with the L<prefork> module,
+and all modules autoloaded will be loaded before forking correctly, when
+requested by L<prefork>.
 
 =head1 METHODS
 
@@ -757,7 +781,7 @@ For other issues, or commercial enhancement or support, contact the author.
 
 =head1 AUTHORS
 
-Adam Kennedy (Maintainer), L<http://ali.as/>, cpan@ali.as
+Adam Kennedy (Creator and Maintainer), L<http://ali.as/>, cpan@ali.as
 
 Rob Napier (No longer involved), rnapier@employees.org
 

@@ -1,5 +1,5 @@
 name: Class-Autouse
-version: 1.18
+version: 1.20
 abstract: Run-time class loading on first method call
 author: Adam Kennedy<cpan@ali.as>
 license: perl
