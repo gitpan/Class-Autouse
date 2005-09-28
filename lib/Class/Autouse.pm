@@ -10,7 +10,8 @@ no strict 'refs'; # We _really_ abuse refs :)
 use UNIVERSAL ();
 
 # Debugging
-# Handle debugging via a constant for speed reasons
+# Handle debugging switch via a constant to allow debugging
+# to be optimised out at compile time if not needed.
 use vars qw{$DEBUG};
 BEGIN {
 	$DEBUG = '' unless defined $DEBUG;
@@ -19,7 +20,10 @@ use constant DEBUG => $DEBUG;
 print "Class::Autouse::autoload -> Debugging Activated.\n" if DEBUG;
 
 # Become an exporter so we don't get complaints when we act as a pragma.
-# I don't fully understand the reason for this, but it works.
+# I don't fully understand the reason for this, but it works and I can't
+# recall how to replicate the problem, so leaving it in to avoid any
+# possible reversion. Besides, so many things use Exporter it should
+# be practically free to do this.
 use base 'Exporter';
 
 # Load required modules
@@ -35,7 +39,7 @@ use vars qw{ $HOOKS %chased *_UNIVERSAL_can     }; # Working information
 
 # Compile-time Initialisation and Optimisation
 BEGIN {
-	$VERSION = '1.20';
+	$VERSION = '1.21';
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
 	*_UNIVERSAL_can = *UNIVERSAL::can{CODE};
@@ -479,7 +483,7 @@ sub _namespace_occupied ($) {
 
 	# Get the list of glob names, ignoring namespaces
 	foreach ( keys %{"${class}::"} ) {
-		next if /::$/;
+		next if substr($_, -2) eq '::';
 
 		# Only check for methods, since that's all that's reliable
 		return 1 if defined *{"${class}::$_"}{CODE};
@@ -591,7 +595,7 @@ Class::Autouse - Run-time class loading on first method call
 
 =head1 SYNOPSIS
 
-  # Debugging should be set before the first use
+  # Debugging (if you go that way) must be set before the first use
   $Class::Autouse::DEBUG = 1;
   
   # Load a class on method call
@@ -607,13 +611,34 @@ Class::Autouse - Run-time class loading on first method call
 
   # Turn on the Super Loader
   use Class::Autouse qw{:superloader};
+  
+  # Disable module-existance check, and thus one additional 'stat'
+  # per module, at autouse-time if loading modules off a remote
+  # network drive such as NFS or SMB.
+  use Class::Autouse qw{:nostat};
 
 =head1 DESCRIPTION
 
-Class::Autouse allows you to specify a class the will only load when a
+C<Class::Autouse> allows you to specify a class the will only load when a
 method of that class is called. For large classes that might not be used
-during the running of a program, such as Date::Manip, this can save
-you large amounts of memory, and decrease the script load time.
+during the running of a program, such as L<Date::Manip>, this can save
+you large amounts of memory, and decrease the script load time a great deal.
+
+=head2 Class, not Module
+
+The terminology "class loading" instead of "module loading" is used
+intentionally. Modules will only be loaded if they are acting as a class.
+
+That is, they will only be loaded during a Class-E<gt>method call. If you try
+to use a subroutine directly, say with C<Class::method()>, the class will
+not be loaded and a fatal error will mostly likely occur.
+
+This limitation is made to allow more powerfull features in other areas,
+because the module can focus on just loading the modules, and not have
+to deal with importing.
+
+And really, if you are doing OO Perl, you should be avoiding importing
+wherever possible.
 
 =head2 Use as a pragma
 
@@ -625,37 +650,18 @@ to load as the arguments. For example
 is equivalent to
 
    use Class::Autouse;
-   Class::Autouse->autouse( 'CGI' );
+   Class::Autouse->autouse( 'CGI'         );
    Class::Autouse->autouse( 'Data::Manip' );
-   Class::Autouse->autouse( 'This::That' );
-
-=head2 The Internal Debugger
-
-If the C<$Class::Autouse::DEBUG> variable is true when C<Class::Autouse>
-is first loaded, debugging will be compiled in. This debugging produces
-output like the following.
-
- Class::Autouse::autouse_recursive( 'Foo' )
-  Class::Autouse::_recursive( 'Foo', 'load' )
-   Class::Autouse::load( 'Foo' )
-   Class::Autouse::_child_classes( 'Foo' )
-   Class::Autouse::load( 'Foo::Bar' )
-    Class::Autouse::_file_exists( 'Foo/Bar.pm' )
-    Class::Autouse::load -> Loading in Foo/Bar.pm
-   Class::Autouse::load( 'Foo::More' )
-    etc...
-
-Please note that because this is optimised out if not used, you can
-no longer (since 1.20) enable debugging at run-time. This decision was
-made to remove a large number of unneeded branching and speed up loading.
+   Class::Autouse->autouse( 'This::That'  );
 
 =head2 Developer Mode
 
 C<Class::Autouse> features a developer mode. In developer mode, classes
 are loaded immediately, just like they would be with a normal 'use'
-statement (although the import sub isn't called). This allows error
-checking to be done while developing, at the expense of a larger
-memory overhead. Developer mode is turned on either with the
+statement (although the import sub isn't called).
+
+This allows error checking to be done while developing, at the expense of
+a larger memory overhead. Developer mode is turned on either with the
 C<devel> method, or using :devel in any of the pragma arguments.
 For example, this would load CGI.pm immediately
 
@@ -676,24 +682,38 @@ to disable initial file existance checking at hook time.
   # Disable autoload-time file existance checking
   use Class::Autouse qw{:nostat};
 
-=head2 Super Loader
+=head2 Super Loader Mode
 
-Turning on the Class::Autouse super loader allows you to automatically
-load ANY class without specifying it first. Thus, the following will work
-and is completely legal.
+Turning on the C<Class::Autouse> super loader allows you to automatically
+load B<ANY> class without specifying it first. Thus, the following will
+work and is completely legal.
 
     use Class::Autouse qw{:superloader};
 
     print CGI->b('Wow!');
 
-The super loader can be turned on with either the Class::Autouse->superloader
-method, or the :superloader pragma argument.
+The super loader can be turned on with either the
+C<Class::Autouse-E<gt>>superloader> method, or the C<:superloader> pragma
+argument.
 
-=head2 Recursion
+Please note that unlike the normal one-at-a-time autoloading, the
+super-loader makes global changes, and so is not completely self-contained.
 
-As an alternative to the super loader, the autouse_recursive and
-load_recursive methods can be used to autouse or load an entire tree of
-classes. For example, the following would give you access to all the URI
+It has the potential to cause unintended effects at a distance. If you
+encounter unusual behaviour, revert to autousing one-at-a-time, or use
+the recursive loading.
+
+Use of the Super Loader is highly discouraged for widely distributed
+public applications or modules unless unavoidable. B<Do not use> just
+to be lazy and save a few lines of code.
+
+=head2 Recursive Loading
+
+As an alternative to the super loader, the C<autouse_recursive> and
+C<load_recursive> methods can be used to autouse or load an entire tree
+of classes.
+
+For example, the following would give you access to all the L<URI>
 related classes installed on the machine.
 
     Class::Autouse->autouse_recursive( 'URI' );
@@ -701,20 +721,10 @@ related classes installed on the machine.
 Please note that the loadings will only occur down a single branch of the
 include path, whichever the top class is located in.
 
-=head2 Class, not Module
-
-The terminology "Class loading" instead of "Module loading" is used
-intentionally. Modules will only be loaded if they are acting as a class.
-That is, they will only be loaded during a Class->method call. If you try
-do use a subroutine directly, say with C<Class::method()>, the class will
-not be loaded. This limitation is made to allow more powerfull features in
-other areas, because the module can focus on just loading the modules, and
-not have to deal with importing.
-
 =head2 mod_perl
 
 The mechanism that C<Class::Autouse> uses is not compatible with L<mod_perl>.
-In particular with reloader modules like L<Apache::Reload>. Class::Autouse
+In particular with reloader modules like L<Apache::Reload>. C<Class::Autouse>
 detects the presence of mod_perl and acts as normal, but will always load
 all classes immediately, equivalent to having developer mode enabled.
 
@@ -728,11 +738,34 @@ As for mod_perl, C<Class::Autouse> is compatible with the L<prefork> module,
 and all modules autoloaded will be loaded before forking correctly, when
 requested by L<prefork>.
 
+=head2 The Internal Debugger
+
+Class::Autouse provides an internal debugger, which can be used to debug
+any weird edge cases you might encounter when using it.
+
+If the C<$Class::Autouse::DEBUG> variable is true when C<Class::Autouse>
+is first loaded, debugging will be compiled in. This debugging prints
+output like the following to STDOUT.
+
+ Class::Autouse::autouse_recursive( 'Foo' )
+  Class::Autouse::_recursive( 'Foo', 'load' )
+   Class::Autouse::load( 'Foo' )
+   Class::Autouse::_child_classes( 'Foo' )
+   Class::Autouse::load( 'Foo::Bar' )
+    Class::Autouse::_file_exists( 'Foo/Bar.pm' )
+    Class::Autouse::load -> Loading in Foo/Bar.pm
+   Class::Autouse::load( 'Foo::More' )
+    etc...
+
+Please note that because this is optimised out if not used, you can
+no longer (since 1.20) enable debugging at run-time. This decision was
+made to remove a large number of unneeded branching and speed up loading.
+
 =head1 METHODS
 
-=head2 autouse $class
+=head2 autouse $class, ...
 
-The autouse method sets the class to be loaded as required.
+The autouse method sets one or more classes to be loaded as required.
 
 =head2 load $class
 
@@ -743,28 +776,34 @@ class, whereas as use effectively ignore the class, and not load it.
 
 =head2 devel
 
-The devel method sets development mode on (argument of 1) or off (argument of 0)
+The devel method sets development mode on (argument of 1) or off
+(argument of 0).
+
+If any classes have previously been autouse'd and not loaded when this
+method is called, they will be loaded immediately.
 
 =head2 superloader
 
-The superloader method turns on the super loader. Please note that once you
-have turned the superloader on, it cannot be turned off. This is due to
-code that might be relying on it being there not being able to autoload its
-classes when another piece of code decides they don't want it any more, and
-turns the superloader off.
+The superloader method turns on the super loader.
+
+Please note that once you have turned the superloader on, it cannot be
+turned off. This is due to code that might be relying on it being there not
+being able to autoload its classes when another piece of code decides
+they don't want it any more, and turns the superloader off.
 
 =head2 class_exists $class
 
-Handy method when doing the sort of jobs that Class::Autouse does. Given
+Handy method when doing the sort of jobs that C<Class::Autouse> does. Given
 a class name, it will return true if the class can be loaded ( i.e. in @INC ),
 false if the class can't be loaded, and undef if the class name is invalid.
 
 Note that this does not actually load the class, just tests to see if it can
-be loaded. Loading can still fail.
+be loaded. Loading can still fail. For a more comprehensive set of methods
+of this nature, see L<Class::Inspector>.
 
 =head2 autouse_recursive $class
 
-The same as the C<autouse> method, but autouses recursively
+The same as the C<autouse> method, but autouses recursively.
 
 =head2 load_recursive $class
 

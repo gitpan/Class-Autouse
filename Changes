@@ -1,5 +1,10 @@
 Revision history for Perl extension Class::Autouse.
 
+1.21 Wed Sep 28 2005
+	- Documenting ->autouse(@classes)
+	- Tidying up the POD a little to refer to features
+	  in an order much more relevant to the reader.
+
 1.20 Tue Aug 18 2005
 	- Catch and rethrow all error when autoloading during a ->can.
 	- Debugging can now only be done at compile time, and thus is
