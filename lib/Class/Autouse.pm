@@ -13,11 +13,8 @@ use UNIVERSAL ();
 # Handle debugging switch via a constant to allow debugging
 # to be optimised out at compile time if not needed.
 use vars qw{$DEBUG};
-BEGIN {
-	$DEBUG = '' unless defined $DEBUG;
-}
 use constant DEBUG => $DEBUG;
-print "Class::Autouse::autoload -> Debugging Activated.\n" if DEBUG;
+print "Class::Autouse::autoload -> Debugging Activated.\n" if defined DEBUG;
 
 # Become an exporter so we don't get complaints when we act as a pragma.
 # I don't fully understand the reason for this, but it works and I can't
@@ -39,7 +36,7 @@ use vars qw{ $HOOKS %chased *_UNIVERSAL_can     }; # Working information
 
 # Compile-time Initialisation and Optimisation
 BEGIN {
-	$VERSION = '1.21';
+	$VERSION = '1.22';
 
 	# We play with UNIVERSAL::can at times, so save a backup copy
 	*_UNIVERSAL_can = *UNIVERSAL::can{CODE};
@@ -76,7 +73,7 @@ BEGIN {
 # Developer mode flag.
 # Cannot be turned off once turned on.
 sub devel {
-	_debug(\@_, 1) if DEBUG;
+	_debug(\@_, 1) if defined DEBUG;
 
 	# Enable if not already
 	return 1 if $DEVEL;
@@ -95,7 +92,7 @@ sub devel {
 # The process here is to replace the &UNIVERSAL::AUTOLOAD sub
 # ( which is just a dummy by default ) with a flexible class loader.
 sub superloader {
-	_debug(\@_, 1) if DEBUG;
+	_debug(\@_, 1) if defined DEBUG;
 
 	unless ( $SUPERLOAD ) {
 		# Overwrite UNIVERSAL::AUTOLOAD and catch any
@@ -122,7 +119,7 @@ sub autouse {
 	# Ignore calls with no arguments
 	return 1 unless @_;
 
-	_debug(\@_) if DEBUG;
+	_debug(\@_) if defined DEBUG;
 
 	foreach my $class ( grep { $_ } @_ ) {
 		# Control flag handling
@@ -181,7 +178,7 @@ sub import { shift->autouse(@_) }
 
 # Completely load a class ( The class and all its dependencies ).
 sub load {
-	_debug(\@_, 1) if DEBUG;
+	_debug(\@_, 1) if defined DEBUG;
 
 	my $class = $_[1] or _cry('No class name specified to load');
 	return 1 if $LOADED{$class};
@@ -210,7 +207,7 @@ sub load {
 # Is a particular class installed in out @INC somewhere
 # OR is it loaded in our program already
 sub class_exists {
-	_debug(\@_, 1) if DEBUG;
+	_debug(\@_, 1) if defined DEBUG;
 	_namespace_occupied($_[1]) or _file_exists($_[1]);
 }
 
@@ -220,7 +217,7 @@ sub class_exists {
 # Returns 0 if the class is not loaded ( or autouse'd )
 # Returns 1 if the class can be used.
 sub can_call_methods {
-	_debug(\@_, 1) if DEBUG;
+	_debug(\@_, 1) if defined DEBUG;
 	_namespace_occupied($_[1]) or exists $INC{_class_file($_[1])};
 }
 
@@ -229,7 +226,7 @@ sub can_call_methods {
 
 # Autouse not only a class, but all others below it.
 sub autouse_recursive {
-	_debug(\@_, 1) if DEBUG;
+	_debug(\@_, 1) if defined DEBUG;
 
 	# Just load if in devel mode
 	return Class::Autouse->load_recursive($_[1]) if $DEVEL;
@@ -243,7 +240,7 @@ sub autouse_recursive {
 
 # Load not only a class and all others below it
 sub load_recursive {
-	_debug(\@_, 1) if DEBUG;
+	_debug(\@_, 1) if defined DEBUG;
 
 	# Load the parent class, and its children
 	foreach ( $_[1], _child_classes($_[1]) ) {
@@ -265,7 +262,7 @@ sub load_recursive {
 
 # Get's linked via the symbol table to any AUTOLOADs are required
 sub _AUTOLOAD {
-	_debug(\@_, 0, ", AUTOLOAD = '$Class::Autouse::AUTOLOAD'") if DEBUG;
+	_debug(\@_, 0, ", AUTOLOAD = '$Class::Autouse::AUTOLOAD'") if defined DEBUG;
 
 	# Loop detection ( Just in case )
 	my $method = $Class::Autouse::AUTOLOAD or _cry('Missing method name');
@@ -297,7 +294,7 @@ sub _AUTOLOAD {
 
 # This just handles the call and does nothing
 sub _DESTROY {
-	_debug(\@_) if DEBUG;
+	_debug(\@_) if defined DEBUG;
 }
 
 # This is the replacement for UNIVERSAL::can
@@ -351,7 +348,7 @@ sub _can {
 
 # Load a single class
 sub _load ($) {
-	_debug(\@_) if DEBUG;
+	_debug(\@_) if defined DEBUG;
 
 	# Don't attempt to load special classes
 	my $class = shift or _cry('Did not specify a class to load');
@@ -379,7 +376,7 @@ sub _load ($) {
 	}
 
 	# Load the file
-	print _call_depth(1) . "  Class::Autouse::load -> Loading in $file\n" if DEBUG;
+	print _call_depth(1) . "  Class::Autouse::load -> Loading in $file\n" if defined DEBUG;
 	eval {
 		CORE::require($file);
 	};
@@ -394,7 +391,7 @@ sub _load ($) {
 # Find all the child classes for a parent class.
 # Returns in the list context.
 sub _child_classes ($) {
-	_debug(\@_) if DEBUG;
+	_debug(\@_) if defined DEBUG;
 
 	# Find where it is in @INC
 	my $base_file = _class_file(shift);
@@ -456,7 +453,7 @@ sub _child_classes ($) {
 # Does a class or file exists somewhere in our include path. For
 # convenience, returns the unresolved file name ( even if passed a class )
 sub _file_exists ($) {
-	_debug(\@_) if DEBUG;
+	_debug(\@_) if defined DEBUG;
 
 	# What are we looking for?
 	my $file = shift or return undef;
@@ -475,7 +472,7 @@ sub _file_exists ($) {
 
 # Is a namespace occupied by anything significant
 sub _namespace_occupied ($) {
-	_debug(\@_) if DEBUG;
+	_debug(\@_) if defined DEBUG;
 
 	# Handle the most likely case
 	my $class = shift or return undef;
@@ -500,7 +497,7 @@ sub _class_file ($) {
 # Establish our call depth
 sub _call_depth {
 	my $spaces = shift;
-	if ( DEBUG and ! $spaces ) { _debug(\@_) }
+	if ( defined DEBUG and ! $spaces ) { _debug(\@_) }
 
 	# Search up the caller stack to find the first call that isn't us.
 	my $level = 0;
@@ -519,7 +516,7 @@ sub _call_depth {
 
 # Die gracefully
 sub _cry {
-	_debug() if DEBUG;
+	_debug() if defined DEBUG;
 	local $Carp::CarpLevel;
 	$Carp::CarpLevel += _call_depth();
 	Carp::croak( $_[0] );
@@ -527,7 +524,7 @@ sub _cry {
 
 # Adaptive debug print generation
 BEGIN {
-	eval <<'END_DEBUG' if DEBUG;
+	eval <<'END_DEBUG' if defined DEBUG;
 
 sub _debug {
 	my $args    = shift;

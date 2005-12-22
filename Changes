@@ -1,5 +1,15 @@
 Revision history for Perl extension Class::Autouse.
 
+1.22 Wed Dec 21 2005
+	- Apparently generating spurious warnings on Perl 5.8.1
+	  on Mac OS X when using SVK. Tentatively applying solution.
+	- No change in functionality on any platform.
+	- No need to upgrade unless you are seeing lots of warnings.
+	- Rolled back the File::Spec dependency from 0.82 to 0.80
+	  to avoid needless upgrades in some 5.005 and 5.006 situations.
+	- Moved from older CVS repository to newer SVN repository
+	- Updated Makefile.PL to Module::Install 0.45
+
 1.21 Wed Sep 28 2005
 	- Documenting ->autouse(@classes)
 	- Tidying up the POD a little to refer to features

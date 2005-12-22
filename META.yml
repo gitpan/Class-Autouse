@@ -1,7 +1,7 @@
 name: Class-Autouse
-version: 1.21
+version: 1.22
 abstract: Run-time class loading on first method call
-author: Adam Kennedy<cpan@ali.as>
+author: Adam Kennedy (Creator and Maintainer), L<http://ali.as/>, cpan@ali.as
 license: perl
 distribution_type: module
 build_requires:
@@ -9,10 +9,10 @@ build_requires:
 requires:
   perl: 5.005
   Carp: 0
-  File::Spec: 0.82
+  File::Spec: 0.80
   List::Util: 1.11
 no_index:
   directory:
-    - modules
+    - t
     - inc
-generated_by: Module::Install version 0.37
+generated_by: Module::Install version 0.45
