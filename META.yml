@@ -1,18 +1,18 @@
-name: Class-Autouse
-version: 1.22
-abstract: Run-time class loading on first method call
-author: Adam Kennedy (Creator and Maintainer), L<http://ali.as/>, cpan@ali.as
-license: perl
-distribution_type: module
+abstract: Run-time load a class the first time you call a method in it.
+author: 'Adam Kennedy (Creator and Maintainer), L<http://ali.as/>, cpan@ali.as'
 build_requires:
   Test::More: 0.47
-requires:
-  perl: 5.005
-  Carp: 0
-  File::Spec: 0.80
-  List::Util: 1.11
+distribution_type: module
+generated_by: Module::Install version 0.50
+license: perl
+name: Class-Autouse
 no_index:
   directory:
-    - t
     - inc
-generated_by: Module::Install version 0.45
+    - t
+requires:
+  Carp: 0
+  File::Spec: 0.80
+  List::Util: 1.18
+  perl: 5.005
+version: 1.23

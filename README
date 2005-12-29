@@ -1,5 +1,6 @@
 NAME
-    Class::Autouse - Run-time class loading on first method call
+    Class::Autouse - Run-time load a class the first time you call a method
+    in it.
 
 SYNOPSIS
       # Debugging (if you go that way) must be set before the first use
