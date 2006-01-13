@@ -3,7 +3,7 @@ author: 'Adam Kennedy (Creator and Maintainer), L<http://ali.as/>, cpan@ali.as'
 build_requires:
   Test::More: 0.47
 distribution_type: module
-generated_by: Module::Install version 0.50
+generated_by: Module::Install version 0.52
 license: perl
 name: Class-Autouse
 no_index:
@@ -13,6 +13,7 @@ no_index:
 requires:
   Carp: 0
   File::Spec: 0.80
-  List::Util: 1.18
+  List::Util: 1.17
+  base: 0
   perl: 5.005
-version: 1.23
+version: 1.24

@@ -22,9 +22,14 @@ t/01_main.t
 t/02_parent.t
 t/03_prefork.t
 t/04_recursive.t
+t/05_base.t
 t/99_pod.t
 t/modules/A.pm
 t/modules/A/B.pm
+t/modules/baseA.pm
+t/modules/baseB.pm
+t/modules/baseC.pm
+t/modules/baseD.pm
 t/modules/C.pm
 t/modules/D.pm
 t/modules/E.pm
