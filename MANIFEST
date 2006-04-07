@@ -23,6 +23,7 @@ t/02_parent.t
 t/03_prefork.t
 t/04_recursive.t
 t/05_base.t
+t/07_isa.t
 t/99_pod.t
 t/modules/A.pm
 t/modules/A/B.pm

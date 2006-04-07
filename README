@@ -4,7 +4,9 @@ NAME
 
 SYNOPSIS
       # Debugging (if you go that way) must be set before the first use
-      $Class::Autouse::DEBUG = 1;
+      BEGIN {
+          $Class::Autouse::DEBUG = 1;
+      }
   
       # Load a class on method call
       use Class::Autouse;
