@@ -9,9 +9,10 @@ use Config ();
 use File::Spec ();
 use ExtUtils::MakeMaker ();
 
-use vars qw{$VERSION @ISA};
+use vars qw{$VERSION $ISCORE @ISA};
 BEGIN {
 	$VERSION = '0.62';
+	$ISCORE  = 1;
 	@ISA     = qw{Module::Install::Base};
 }
 
@@ -78,4 +79,4 @@ if ( $^O eq 'cygwin' ) {
 
 __END__
 
-#line 156
+#line 157

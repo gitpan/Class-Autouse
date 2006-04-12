@@ -5,14 +5,14 @@ no_index:
     - t
 generated_by: Module::Install version 0.62
 distribution_type: module
-version: 1.25
+version: 1.26
 name: Class-Autouse
 author: Adam Kennedy (Creator and Maintainer), L<http://ali.as/>, cpan@ali.as
 license: perl
 build_requires: 
   Test::More: 0.47
 requires: 
-  List::Util: 1.17
+  List::Util: 1.18
   base: 0
   perl: 5.005
   File::Spec: 0.80
