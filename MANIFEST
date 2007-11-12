@@ -21,7 +21,8 @@ t/03_prefork.t
 t/04_recursive.t
 t/05_base.t
 t/07_isa.t
-t/99_author.t
+t/98_pod.t
+t/99_pmv.t
 t/modules/A.pm
 t/modules/A/B.pm
 t/modules/baseA.pm
