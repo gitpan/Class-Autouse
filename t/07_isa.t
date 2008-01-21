@@ -1,17 +1,16 @@
-#!/usr/bin/perl -wl
+#!/usr/bin/perl
 
 use strict;
-use lib ();
-use File::Spec::Functions ':ALL';
+use File::Spec ();
 BEGIN {
-	$| = 1;
-	if ( $ENV{HARNESS_ACTIVE} ) {
-		lib->import( catdir( curdir(), 't', 'modules' ) );
-	} else {
-		require FindBin;
-		chdir ($FindBin::Bin = $FindBin::Bin); # Avoid a warning
-		lib->import( 'modules' );
-	}
+	$|  = 1;
+	$^W = 1;
+	require lib;
+	lib->import(
+		File::Spec->catdir(
+			File::Spec->curdir, 't', 'modules',
+		)
+	);
 }
 
 use Test::More tests => 1;
@@ -21,4 +20,3 @@ use Class::Autouse;
 Class::Autouse->autouse('baseB');
 
 ok( baseB->isa('baseA'), 'isa() triggers autouse' );
-

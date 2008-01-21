@@ -1,11 +1,13 @@
 --- 
 abstract: Run-time load a class the first time you call a method in it.
 author: 
-  - Adam Kennedy (Creator and Maintainer), L<http://ali.as/>, cpan@ali.as
+  - Adam Kennedy <cpan@ali.as>
 build_requires: 
+  File::Temp: 0
   Test::More: 0.47
+  base: 0
 distribution_type: module
-generated_by: Module::Install version 0.68
+generated_by: Module::Install version 0.680
 license: perl
 meta-spec: 
   url: http://module-build.sourceforge.net/META-spec-v1.3.html
@@ -19,6 +21,7 @@ requires:
   Carp: 0
   File::Spec: 0.80
   List::Util: 1.19
-  base: 0
+  constant: 0
+  lib: 0
   perl: 5.005
-version: 1.29
+version: 1.99_01

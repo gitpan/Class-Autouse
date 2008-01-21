@@ -1,4 +1,4 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl
 
 # Formal testing for Class::Autouse.
 # While this isn't a particularly exhaustive unit test like script, 
@@ -8,17 +8,16 @@
 # as advertised... we hope ;)
 
 use strict;
-use lib ();
-use File::Spec::Functions ':ALL';
+use File::Spec ();
 BEGIN {
-	$| = 1;
-	if ( $ENV{HARNESS_ACTIVE} ) {
-		lib->import( catdir( curdir(), 't', 'modules' ) );
-	} else {
-		require FindBin;
-		chdir ($FindBin::Bin = $FindBin::Bin); # Avoid a warning
-		lib->import( 'modules' );
-	}
+	$|  = 1;
+	$^W = 1;
+	require lib;
+	lib->import(
+		File::Spec->catdir(
+			File::Spec->curdir, 't', 'modules',
+		)
+	);
 }
 
 use Test::More tests => 29;
@@ -44,9 +43,9 @@ ok( ! Class::Autouse->class_exists( 'Class::Autouse::Nonexistant' ), '->class_ex
 # Does ->can for an autoused class correctly load the class and find the method.
 my $class = 'D';
 ok( refaddr(*UNIVERSAL::can{CODE}), "We know which version of UNIVERSAL::can we are using" );
-is( refaddr(*UNIVERSAL::can{CODE}), refaddr($Class::Autouse::orig_can),
+is( refaddr(*UNIVERSAL::can{CODE}), refaddr($Class::Autouse::ORIGINAL_CAN),
 	"Before autoloading, UNIVERSAL::can is in it's original state, and has been backed up");
-is( refaddr(*UNIVERSAL::isa{CODE}), refaddr($Class::Autouse::orig_isa),
+is( refaddr(*UNIVERSAL::isa{CODE}), refaddr($Class::Autouse::ORIGINAL_ISA),
 	"Before autoloading, UNIVERSAL::isa is in it's original state, and has been backed up");
 ok( Class::Autouse->autouse( $class ), "Test class '$class' autoused ok" );
 is( refaddr(*UNIVERSAL::can{CODE}), refaddr(*Class::Autouse::_can{CODE}),
@@ -55,9 +54,9 @@ is( refaddr(*UNIVERSAL::isa{CODE}), refaddr(*Class::Autouse::_isa{CODE}),
 	"After autoloading, UNIVERSAL::isa has been correctly hijacked");
 ok( $class->can('method2'), "'can' found sub 'method2' in autoused class '$class'" );
 ok( $Class::Autouse::LOADED{$class}, "'can' loaded class '$class' while looking for 'method2'" );
-is( refaddr(*UNIVERSAL::can{CODE}), refaddr($Class::Autouse::orig_can),
+is( refaddr(*UNIVERSAL::can{CODE}), refaddr($Class::Autouse::ORIGINAL_CAN),
 	"When all classes are loaded, UNIVERSAL::can reverts back to the original state");
-is( refaddr(*UNIVERSAL::isa{CODE}), refaddr($Class::Autouse::orig_isa),
+is( refaddr(*UNIVERSAL::isa{CODE}), refaddr($Class::Autouse::ORIGINAL_ISA),
 	"Whan all classes are loaded, UNIVERSAL::isa reverts back to the original state");
 
 # Use the loaded hash again to avoid a warning

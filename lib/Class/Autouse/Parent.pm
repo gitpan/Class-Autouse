@@ -9,9 +9,10 @@ use Class::Autouse ();
 
 use vars qw{$VERSION};
 BEGIN {
-	$VERSION = '1.29';
+	$VERSION = '1.99_01';
 }
 
+# Anti-loop protection.
 # Maintain flags for "is the class in the process of loading"
 my %LOADING = ();
 
