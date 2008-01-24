@@ -24,4 +24,4 @@ requires:
   constant: 0
   lib: 0
   perl: 5.005
-version: 1.99_01
+version: 1.99_02
