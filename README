@@ -3,49 +3,68 @@ NAME
     in it.
 
 SYNOPSIS
-      # Debugging (if you go that way) must be set before the first use
-      BEGIN {
+        ##################################################################
+        # SAFE FEATURES
+
+        # Debugging (if you go that way) must be set before the first use
+        BEGIN {
             $Class::Autouse::DEBUG = 1;
-      }
-  
-      # Load a class on method call
-      use Class::Autouse;
-      Class::Autouse->autouse( 'CGI' );
-      print CGI->b('Wow!');
-  
-      # Use as a pragma
-      use Class::Autouse qw{CGI};
-  
-      # Use a whole module tree
-      Class::Autouse->autouse_recursive('Acme');
-  
-      # Autouse any class matching a given regular expression
-      use Class::Autouse qr/::Test$/;
-  
-      # Install a class generator (instead of overriding UNIVERSAL::AUTOLOAD)
-      # (See below for a detailed example)
-      use Class::Autouse \&my_class_generator;
-  
-      # Turn on developer mode
-      use Class::Autouse qw{:devel};
-  
-      # Turn on the Super Loader
-      use Class::Autouse qw{:superloader};
-  
-      # Add a callback to UNIVERSAL::AUTOLOAD for syntactic sugar
-      Class::Autouse->sugar(\&my_magic);
-  
-      # Disable module-existance check, and thus one additional 'stat'
-      # per module, at autouse-time if loading modules off a remote
-      # network drive such as NFS or SMB.
-      # (See below for other performance optimizations.)
-      use Class::Autouse qw{:nostat};
+        }
+
+        # Turn on developer mode (always load immediately)
+        use Class::Autouse qw{:devel};
+
+        # Load a class on method call
+        use Class::Autouse;
+        Class::Autouse->autouse( 'CGI' );
+        print CGI->b('Wow!');
+
+        # Use as a pragma
+        use Class::Autouse qw{CGI};
+
+        # Use a whole module tree
+        Class::Autouse->autouse_recursive('Acme');
+
+        # Disable module-existance check, and thus one additional 'stat'
+        # per module, at autouse-time if loading modules off a remote
+        # network drive such as NFS or SMB.
+        # (See below for other performance optimizations.)
+        use Class::Autouse qw{:nostat};
+
+
+
+
+
+        ##################################################################
+        # UNSAFE FEATURES
+
+        # Turn on the Super Loader (load all classes on demand)
+        use Class::Autouse qw{:superloader};
+
+        # Autouse classes matching a given regular expression
+        use Class::Autouse qr/::Test$/;
+
+        # Install a class generator (instead of overriding UNIVERSAL::AUTOLOAD)
+        # (See below for a detailed example)
+        use Class::Autouse \&my_class_generator;
+
+        # Add a manual callback to UNIVERSAL::AUTOLOAD for syntactic sugar
+        Class::Autouse->sugar(\&my_magic);
 
 DESCRIPTION
-    "Class::Autouse" allows you to specify a class the will only load when a
-    method of that class is called. For large classes that might not be used
-    during the running of a program, such as Date::Manip, this can save you
-    large amounts of memory, and decrease the script load time a great deal.
+    Class::Autouse is a runtime class loader that allows you to specify
+    classes that will only load when a method of that class is called.
+
+    For large classes or class trees that might not be used during the
+    running of a program, such as Date::Manip, this can save you large
+    amounts of memory, and decrease the script load time a great deal.
+
+    Class::Autouse also provides a number of "unsafe" features for runtime
+    generation of classes and implementation of syntactic sugar. These
+    features make use of (evil) UNIVERSAL::AUTOLOAD hooking, and are
+    implemented in this class because these hooks can only be done by a one
+    module, and Class::Autouse serves as a useful place to centralise this
+    kind of evil :)
 
   Class, not Module
     The terminology "class loading" instead of "module loading" is used
@@ -86,13 +105,26 @@ DESCRIPTION
     "devel" method, or using :devel in any of the pragma arguments. For
     example, this would load CGI.pm immediately
 
-            use Class::Autouse qw{:devel CGI};
+        use Class::Autouse qw{:devel CGI};
 
     While developer mode is roughly equivalent to just using a normal use
     command, for a large number of modules it lets you use autoloading
     notation, and just comment or uncomment a single line to turn developer
     mode on or off. You can leave it on during development, and turn it off
     for speed reasons when deploying.
+
+  Recursive Loading
+    As an alternative to the super loader, the "autouse_recursive" and
+    "load_recursive" methods can be used to autouse or load an entire tree
+    of classes.
+
+    For example, the following would give you access to all the URI related
+    classes installed on the machine.
+
+        Class::Autouse->autouse_recursive( 'URI' );
+
+    Please note that the loadings will only occur down a single branch of
+    the include path, whichever the top class is located in.
 
   No-Stat Mode
     For situations where a module exists on a remote disk or another
@@ -107,9 +139,9 @@ DESCRIPTION
     load ANY class without specifying it first. Thus, the following will
     work and is completely legal.
 
-            use Class::Autouse qw{:superloader};
+        use Class::Autouse qw{:superloader};
 
-            print CGI->b('Wow!');
+        print CGI->b('Wow!');
 
     The super loader can be turned on with either the
     "Class::Autouse->"superloader> method, or the ":superloader" pragma
@@ -127,19 +159,6 @@ DESCRIPTION
     public applications or modules unless unavoidable. Do not use just to be
     lazy and save a few lines of code.
 
-  Recursive Loading
-    As an alternative to the super loader, the "autouse_recursive" and
-    "load_recursive" methods can be used to autouse or load an entire tree
-    of classes.
-
-    For example, the following would give you access to all the URI related
-    classes installed on the machine.
-
-            Class::Autouse->autouse_recursive( 'URI' );
-
-    Please note that the loadings will only occur down a single branch of
-    the include path, whichever the top class is located in.
-
   Loading with Regular Expressions
     As another alternative to the superloader and recursive loading, a
     compiled regular expression (qr//) can be supplied as a loader. Note
@@ -152,7 +171,7 @@ DESCRIPTION
     launch each registered callback until one returns true.
 
     Since overriding UNIVERSAL::AUTOLOAD can be done only once in a given
-    Perl application. This feature allows UNIVERSAL::AUTOLOAD to be shared.
+    Perl application, this feature allows UNIVERSAL::AUTOLOAD to be shared.
     Please use this instead of implementing your own UNIVERSAL::AUTOLOAD.
 
     See the warnings under the "Super Loader Module" above which apply to
@@ -166,57 +185,60 @@ DESCRIPTION
     Any use of a class like Foo::Wrapper autogenerates that class as a proxy
     around Foo.
 
-            use Class::Autouse sub {
-                    my ($class) = @_;
-                    if ($class =~ /(^.*)::Wrapper/) {
-                            my $wrapped_class = $1;
-                            eval "package $class; use Class::AutoloadCAN;";
-                            die $@ if $@;
-                            no strict 'refs';
-                            *{$class . '::new' } = sub {
-                                    my $class = shift;
-                                    my $proxy = $wrapped_class->new(@_);
-                                    my $self = bless({proxy => $proxy},$class);
-                                    return $self;
-                            };
-                            *{$class . '::CAN' } = sub {
-                                    my ($obj,$method) = @_;
-                                    my $delegate = $wrapped_class->can($method);
-                                    return unless $delegate;
-                                    my $delegator = sub {
-                                            my $self = shift;
-                                            if (ref($self)) {
-                                                    return $self->{proxy}->$method(@_);
-                                            }
-                                            else {
-                                                    return $wrapped_class->$method(@_);
-                                            }
-                                    };
-                                    return *{ $class . '::' . $method } = $delegator;
-                            };
+        use Class::Autouse sub {
+            my ($class) = @_;
+            if ($class =~ /(^.*)::Wrapper/) {
+                my $wrapped_class = $1;
+                eval "package $class; use Class::AutoloadCAN;";
+                die $@ if $@;
+                no strict 'refs';
+                *{$class . '::new' } = sub {
+                    my $class = shift;
+                    my $proxy = $wrapped_class->new(@_);
+                    my $self = bless({proxy => $proxy},$class);
+                    return $self;
+                };
+                *{$class . '::CAN' } = sub {
+                    my ($obj,$method) = @_;
+                    my $delegate = $wrapped_class->can($method);
+                    return unless $delegate;
+                    my $delegator = sub {
+                        my $self = shift;
+                        if (ref($self)) {
+                            return $self->{proxy}->$method(@_);
+                        }
+                        else {
+                            return $wrapped_class->$method(@_);
+                        }
+                    };
+                    return *{ $class . '::' . $method } = $delegator;
+                };
 
-                            return 1;
-                    }
-                    return;
-            };
-
-            package Foo;
-            sub new { my $class = shift; bless({@_},$class); }
-            sub class_method { 123 }
-            sub instance_method {
-                    my ($self,$v) = @_;
-                    return $v * $self->some_property
+                return 1;
             }
-            sub some_property { shift->{some_property} }
+            return;
+        };
 
-            package main;
-            my $x = Foo::Wrapper->new(some_property => 111);
-            print $x->some_property,"\n";
-            print $x->instance_method(5),"\n";
-            print Foo::Wrapper->class_method,"\n";
+        package Foo;
+        sub new { my $class = shift; bless({@_},$class); }
+        sub class_method { 123 }
+        sub instance_method {
+            my ($self,$v) = @_;
+            return $v * $self->some_property
+        }
+        sub some_property { shift->{some_property} }
+
+
+        package main;
+        my $x = Foo::Wrapper->new(
+            some_property => 111,
+        );
+        print $x->some_property,"\n";
+        print $x->instance_method(5),"\n";
+        print Foo::Wrapper->class_method,"\n";
 
   sugar
-    This method is present to support "syntactic sugar": allowing the
+    This method is provided to support "syntactic sugar": allowing the
     developer to put things into Perl which do not look like regular Perl.
     There are several ways to do this in Perl. Strategies which require
     overriding UNIVERSAL::AUTOLOAD can use this interface instead to share
@@ -239,14 +261,22 @@ DESCRIPTION
     generate classes, use the regular CODE ref support in autouse().
 
    Syntactic Sugar Example
-    use Class::Autouse; Class::Autouse->sugar( sub { my $caller = caller(1);
-    my ($class,$method,@params) = @_; shift @params; my @words =
-    ($method,$class,@params); my $sentence = join(" ",@words); return sub {
-    $sentence }; } );
+        use Class::Autouse;
+        Class::Autouse->sugar(
+            sub {
+                my $caller = caller(1);
+                my ($class,$method,@params) = @_;
+                shift @params;
+                my @words = ($method,$class,@params);
+                my $sentence = join(" ",@words);
+                return sub { $sentence };
+            }
+        );
 
-    $x = trolls have big ugly hairy feet;
+        $x = trolls have big ugly hairy feet;
 
-    print $x,"\n"; # trolls have big ugly hairy feet
+        print $x,"\n";
+        # trolls have big ugly hairy feet
 
   mod_perl
     The mechanism that "Class::Autouse" uses is not compatible with
@@ -266,9 +296,9 @@ DESCRIPTION
     below.
 
   prefork
-    As for mod_perl, "Class::Autouse" is compatible with the prefork module,
-    and all modules specifically autoloaded will be loaded before forking
-    correctly, when requested by prefork.
+    As with mod_perl, "Class::Autouse" is compatible with the prefork
+    module, and all modules specifically autoloaded will be loaded before
+    forking correctly, when requested by prefork.
 
     Since modules generated via callback or regex cannot be loaded
     automatically by prefork in a generic way, it's advised to use prefork
@@ -286,7 +316,7 @@ DESCRIPTION
         This is true in most cases, but will break if the developer intends
         to reconstitute serialized objects from Data::Dumper, FreezeThaw or
         its cousins, and has configured Class::Autouse to load the involved
-        clases just-in-time.
+        classes just-in-time.
 
     :staticisa
         When set, presumes that @ISA will not change for a class once it is
@@ -304,15 +334,15 @@ DESCRIPTION
     first loaded, debugging will be compiled in. This debugging prints
     output like the following to STDOUT.
 
-     Class::Autouse::autouse_recursive( 'Foo' )
-      Class::Autouse::_recursive( 'Foo', 'load' )
-       Class::Autouse::load( 'Foo' )
-       Class::Autouse::_child_classes( 'Foo' )
-       Class::Autouse::load( 'Foo::Bar' )
-            Class::Autouse::_file_exists( 'Foo/Bar.pm' )
-            Class::Autouse::load -> Loading in Foo/Bar.pm
-       Class::Autouse::load( 'Foo::More' )
-            etc...
+        Class::Autouse::autouse_recursive( 'Foo' )
+            Class::Autouse::_recursive( 'Foo', 'load' )
+                Class::Autouse::load( 'Foo' )
+                Class::Autouse::_children( 'Foo' )
+                Class::Autouse::load( 'Foo::Bar' )
+                    Class::Autouse::_file_exists( 'Foo/Bar.pm' )
+                    Class::Autouse::load -> Loading in Foo/Bar.pm
+                Class::Autouse::load( 'Foo::More' )
+                    etc...
 
     Please note that because this is optimised out if not used, you can no
     longer (since 1.20) enable debugging at run-time. This decision was made
@@ -381,7 +411,7 @@ SEE ALSO
     autoload, autoclass
 
 COPYRIGHT
-    Copyright 2002 - 2008 Adam Kennedy.
+    Copyright 2002 - 2011 Adam Kennedy.
 
     This program is free software; you can redistribute it and/or modify it
     under the same terms as Perl itself.

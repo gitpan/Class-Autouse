@@ -7,9 +7,9 @@ package Class::Autouse::Parent;
 use strict;
 use Class::Autouse ();
 
-use vars qw{$VERSION};
+our $VERSION;
 BEGIN {
-	$VERSION = '1.99_02';
+	$VERSION = '1.99_04';
 }
 
 # Anti-loop protection.
@@ -25,11 +25,11 @@ sub import {
 	return 1 if $LOADING{$parent};
 
 	# Autoload in our children
-	$LOADING{parent} = 1;
-	Class::Autouse->autouse_recursive( $parent );
-	delete $LOADING{parent};
+	$LOADING{$parent} = 1;
+	Class::Autouse->autouse_recursive($parent);
+	delete $LOADING{$parent};
 
-	1;
+	return 1;
 }
 
 1;
